@@ -105,10 +105,20 @@ export function App() {
   };
 
   return (
-    <div ref={shellRef} className="app-shell" data-scroll-state="settled" onPointerMove={handlePointerMove}>
-      <AmbientVideoBackground />
-      <div className="grid-bg" aria-hidden="true" />
-      <div className="scanline-overlay" aria-hidden="true" />
+    <div 
+      ref={shellRef} 
+      className="app-shell" 
+      data-scroll-state="settled" 
+      onPointerMove={handlePointerMove}
+      style={view !== "home" ? { backgroundColor: "#000000", backgroundImage: "none" } : undefined}
+    >
+      {view === "home" && (
+        <>
+          <AmbientVideoBackground />
+          <div className="grid-bg" aria-hidden="true" />
+          <div className="scanline-overlay" aria-hidden="true" />
+        </>
+      )}
 
       {/* Global Navigation Header (only on non-terminal views) */}
       {view !== "terminal" && (
