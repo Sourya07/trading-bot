@@ -23,9 +23,28 @@ export function usePhantomWallet() {
 
   const getProvider = useCallback((): PhantomProvider | null => {
     if (typeof window === "undefined") return null;
-    const provider = window.phantom?.solana;
-    if (!provider) return null;
-    return provider;
+    
+    // Log detected providers to help debug in developer console
+    console.log("Wallet Detection:", {
+      phantom: window.phantom,
+      solana: (window as any).solana,
+      isPhantom: (window as any).solana?.isPhantom
+    });
+
+    if (window.phantom?.solana) {
+      return window.phantom.solana;
+    }
+    
+    const anySolana = (window as any).solana;
+    if (anySolana?.isPhantom) {
+      return anySolana;
+    }
+    
+    if (anySolana) {
+      return anySolana;
+    }
+    
+    return null;
   }, []);
 
   useEffect(() => {
