@@ -45,6 +45,7 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
   const setStrategy = useTerminalStore((s) => s.setStrategy);
   const addAgentLog = useTerminalStore((s) => s.addAgentLog);
   const addPosition = useTerminalStore((s) => s.addPosition);
+  const currentMatch = useTerminalStore((s) => s.currentMatch);
 
   const handleCreate = async () => {
     if (!wallet.address) return;
@@ -180,23 +181,34 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
         </div>
 
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button
-            onClick={handleToggle}
-            disabled={toggling}
-            variant={strategy.agent_active ? "default" : "outline"}
-            size="sm"
-            className={`w-full gap-1.5 ${
-              strategy.agent_active
-                ? "bg-gradient-to-r from-loss/80 to-loss/60 hover:from-loss/70 hover:to-loss/50 text-white border-0"
-                : "bg-gradient-to-r from-profit/80 to-profit/60 hover:from-profit/70 hover:to-profit/50 text-white border-0"
-            }`}
-          >
-            {strategy.agent_active ? (
-              <><Square className="h-3.5 w-3.5" /> Stop Agent</>
-            ) : (
-              <><Play className="h-3.5 w-3.5" /> Start Agent</>
-            )}
-          </Button>
+          {currentMatch?.status === "final" ? (
+            <Button
+              disabled
+              variant="outline"
+              size="sm"
+              className="w-full gap-1.5 bg-slate-900/50 text-slate-500 border-slate-800"
+            >
+              Match Finalized
+            </Button>
+          ) : (
+            <Button
+              onClick={handleToggle}
+              disabled={toggling}
+              variant={strategy.agent_active ? "default" : "outline"}
+              size="sm"
+              className={`w-full gap-1.5 ${
+                strategy.agent_active
+                  ? "bg-gradient-to-r from-loss/80 to-loss/60 hover:from-loss/70 hover:to-loss/50 text-white border-0"
+                  : "bg-gradient-to-r from-profit/80 to-profit/60 hover:from-profit/70 hover:to-profit/50 text-white border-0"
+              }`}
+            >
+              {strategy.agent_active ? (
+                <><Square className="h-3.5 w-3.5" /> Stop Agent</>
+              ) : (
+                <><Play className="h-3.5 w-3.5" /> Start Agent</>
+              )}
+            </Button>
+          )}
         </motion.div>
       </motion.div>
     );
@@ -251,12 +263,12 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
           <Button
             onClick={handleCreate}
-            disabled={creating || !wallet.connected}
+            disabled={creating || !wallet.connected || currentMatch?.status === "final"}
             size="sm"
             className="w-full gap-1.5 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
           >
             <Shield className="h-3.5 w-3.5" />
-            {creating ? "Creating..." : "Create Strategy"}
+            {creating ? "Creating..." : currentMatch?.status === "final" ? "Match Finalized" : "Create Strategy"}
           </Button>
         </motion.div>
         {!wallet.connected && (

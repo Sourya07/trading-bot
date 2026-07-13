@@ -1,19 +1,15 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import ws from "ws";
+import pg from "pg";
 import { config } from "dotenv";
 import { randomUUID } from "crypto";
 
 config();
-
-// Neon serverless driver needs a WebSocket constructor for Node.js
-neonConfig.webSocketConstructor = ws;
 
 const databaseUrl = process.env.DATABASE_URL;
 
 // Global fallback flag
 export let useInMemoryDb = !databaseUrl;
 
-export const pool = databaseUrl ? new Pool({ connectionString: databaseUrl }) : null;
+export const pool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl }) : null;
 
 // In-Memory Database store
 class InMemoryStore {
@@ -261,6 +257,14 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
     return (strat ? [strat] : []) as unknown as T[];
   }
 
+  // 10b. SELECT * FROM strategies WHERE match_id = $1 AND agent_active = true
+  if (sql.includes("SELECT * FROM strategies WHERE match_id = $1 AND agent_active = true")) {
+    const list = Array.from(inMemoryStore.strategies.values()).filter(
+      s => s.match_id === params?.[0] && s.agent_active === true
+    );
+    return list as unknown as T[];
+  }
+
   // 11. INSERT INTO strategies
   if (sql.includes("INSERT INTO strategies")) {
     const rawConfig = params?.[3];
@@ -306,6 +310,12 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
     const list = Array.from(inMemoryStore.positions.values()).filter(p => p.match_id === params?.[0]);
     list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return list as unknown as T[];
+  }
+
+  // 15b. SELECT * FROM positions WHERE id = $1
+  if (sql.includes("SELECT * FROM positions WHERE id = $1")) {
+    const pos = inMemoryStore.positions.get(params?.[0]);
+    return (pos ? [pos] : []) as unknown as T[];
   }
 
   // 16. INSERT INTO positions
