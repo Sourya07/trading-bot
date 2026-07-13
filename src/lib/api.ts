@@ -76,8 +76,8 @@ export const api = {
   getWallet: (address: string) =>
     fetchJson<{ address: string; balance: number }>(`${API_BASE}/wallet/${address}`),
 
-  getSettlements: (matchId: string) =>
-    fetchJson<SettlementData[]>(`${API_BASE}/settlements/${matchId}`),
+  getSettlements: (matchId: string, wallet = "") =>
+    fetchJson<SettlementData[]>(`${API_BASE}/settlements/${matchId}?wallet=${wallet}`),
 
   recordSettlementSignature: (positionId: string, signature: string) =>
     fetchJson<{ ok: boolean }>(`${API_BASE}/settlements/${positionId}/anchor-signature`, {

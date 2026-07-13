@@ -55,7 +55,7 @@ export function useTxLineSocket(walletAddress?: string) {
           }
           break;
         case "position_settled":
-          api.getSettlements(currentMatch.match_id).then(setSettlements).catch(() => {});
+          api.getSettlements(currentMatch.match_id, walletAddress || "").then(setSettlements).catch(() => {});
           const strategy = useTerminalStore.getState().strategy;
           if (strategy) {
             api.getPositions(strategy.id).then((p) => {

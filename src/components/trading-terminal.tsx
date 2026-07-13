@@ -83,7 +83,7 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
       }).catch(() => {});
     }
 
-    api.getSettlements(matchId).then(setSettlements).catch(() => {});
+    api.getSettlements(matchId, wallet.address || "").then(setSettlements).catch(() => {});
   }, [matchId, wallet.address, setCurrentMatch, setOddsHistory, setStrategy, setPositions, setAgentLogs, setSettlements]);
 
   if (loading || !currentMatch) {
@@ -586,7 +586,7 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
 
           {/* Cryptographic Proof verification panel */}
           <motion.div custom={6} variants={panelVariants} initial="hidden" animate="show">
-            <ProofPanel matchId={matchId} />
+            <ProofPanel matchId={matchId} wallet={wallet} />
           </motion.div>
         </div>
 

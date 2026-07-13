@@ -9,7 +9,7 @@ import { ShieldCheck, ExternalLink, Copy, CheckCircle, Lock, ChevronLeft, Chevro
 import { AnimatedNumber } from "./animated-number";
 import type { DevnetProgramStatus } from "@/lib/types";
 
-export function ProofPanel({ matchId }: { matchId: string }) {
+export function ProofPanel({ matchId, wallet }: { matchId: string; wallet: any }) {
   const settlements = useTerminalStore((s) => s.settlements);
   const setSettlements = useTerminalStore((s) => s.setSettlements);
   const currentMatch = useTerminalStore((s) => s.currentMatch);
@@ -22,8 +22,8 @@ export function ProofPanel({ matchId }: { matchId: string }) {
   }, [matchId, settlements.length]);
 
   useEffect(() => {
-    api.getSettlements(matchId).then(setSettlements).catch(() => {});
-  }, [matchId, setSettlements]);
+    api.getSettlements(matchId, wallet.address || "").then(setSettlements).catch(() => {});
+  }, [matchId, wallet.address, setSettlements]);
 
   useEffect(() => {
     api.getDevnetStatus().then(setDevnetStatus).catch(() => {});

@@ -240,15 +240,27 @@ app.post("/api/settlements/:positionId/anchor-signature", async (req, res) => {
 
 app.get("/api/settlements/:matchId", async (req, res) => {
   try {
-    // Join settlements with positions to replicate Supabase's `select("*, positions(*)")`
-    const data = await query(
-      `SELECT s.*, row_to_json(p.*) as positions
-       FROM settlements s
-       LEFT JOIN positions p ON s.position_id = p.id
-       WHERE s.match_id = $1
-       ORDER BY s.settled_at DESC`,
-      [req.params.matchId]
-    );
+    const wallet = req.query.wallet as string;
+    let data;
+    if (wallet) {
+      data = await query(
+        `SELECT s.*, row_to_json(p.*) as positions
+         FROM settlements s
+         LEFT JOIN positions p ON s.position_id = p.id
+         WHERE s.match_id = $1 AND p.wallet = $2
+         ORDER BY s.settled_at DESC`,
+        [req.params.matchId, wallet]
+      );
+    } else {
+      data = await query(
+        `SELECT s.*, row_to_json(p.*) as positions
+         FROM settlements s
+         LEFT JOIN positions p ON s.position_id = p.id
+         WHERE s.match_id = $1
+         ORDER BY s.settled_at DESC`,
+        [req.params.matchId]
+      );
+    }
     res.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
