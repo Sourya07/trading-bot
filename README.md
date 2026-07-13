@@ -6,7 +6,7 @@ Designed for the **TxLINE Data Layer Track** on Superteam Earn.
 
 ---
 
-## 🌟 Key Highlights & Features
+##  Key Highlights & Features
 
 *   **Cinematic Scroll-Driven Video Backdrop**: Features an optimized GPU frame pre-caching canvas engine that preloads `/football.mp4` into `ImageBitmap` buffers. On scroll, it draws pre-decoded frames directly to an HTML5 `<canvas>` at **60FPS fluid video scrubbing** with zero browser seek-latency.
 *   **Autonomous Strategy Agent Engine**: Deploy automated hedging bots in real-time. Supports three core programmatic strategy templates:
@@ -56,7 +56,7 @@ Open `http://localhost:5173/` in your browser.
 
 ---
 
-## 📂 Project Architecture
+## Project Architecture
 
 ```
 ├── anchor/                  # Anchor Rust Solana smart contract
@@ -75,7 +75,7 @@ Open `http://localhost:5173/` in your browser.
 
 ---
 
-## 🛰️ TxLINE API & Data Ingestion
+## TxLINE API & Data Ingestion
 
 TxHedge ingests real-time sports odds and progression feeds from the following devnet endpoints:
 
@@ -85,7 +85,7 @@ TxHedge ingests real-time sports odds and progression feeds from the following d
 
 ---
 
-## ⛓️ On-Chain Anchor Program Details
+##  On-Chain Anchor Program Details
 
 - **Program ID**: `BZ6W4B9Te3nnZWXd19QSaTXDxTF1rtC1je8roTDrorrk` (Deployed on Solana Devnet)
 - **Instructions Used**:
@@ -95,7 +95,7 @@ TxHedge ingests real-time sports odds and progression feeds from the following d
 
 ---
 
-## 💬 Hackathon Feedback & Developer Experience
+## Hackathon Feedback & Developer Experience
 
 ### What We Liked Most
 *   **Normalized JSON Schema**: The single, normalized schema across competitions made parsing odds and scoring updates incredibly simple. It saved us from writing custom adapters.
