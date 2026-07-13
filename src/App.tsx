@@ -266,8 +266,11 @@ function AmbientVideoBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement>(null);
 
+  const isMobile = typeof window !== "undefined" && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
   // 1. Offscreen Frame Extraction on Mount
   useEffect(() => {
+    if (isMobile) return;
     let isMounted = true;
     const video = document.createElement("video");
     video.src = "/football.mp4";
@@ -408,6 +411,8 @@ function AmbientVideoBackground() {
             src="/football.mp4"
             muted
             playsInline
+            autoPlay
+            loop
             preload="auto"
           />
         )}
