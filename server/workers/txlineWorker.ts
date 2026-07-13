@@ -27,6 +27,59 @@ function broadcast(clients: Set<WebSocket>, msg: unknown) {
   });
 }
 
+function calculateOddsFromScore(homeScore: number, awayScore: number, minute: number): { home: number; away: number; draw: number } {
+  const goalDiff = homeScore - awayScore;
+  const progress = Math.min(1, minute / 90);
+  const timeRemainingFactor = 1 - progress;
+
+  if (minute >= 90) {
+    if (goalDiff > 0) {
+      return { home: 1.01, away: 99.0, draw: 99.0 };
+    } else if (goalDiff < 0) {
+      return { home: 99.0, away: 1.01, draw: 99.0 };
+    } else {
+      return { home: 99.0, away: 99.0, draw: 1.01 };
+    }
+  }
+
+  // Base probabilities
+  let pHome = 0.38;
+  let pAway = 0.34;
+  let pDraw = 0.28;
+
+  // Add random walk drift to keep the charts dynamic
+  const drift = (Math.random() - 0.5) * 0.08;
+  pHome = Math.max(0.05, Math.min(0.9, pHome + drift));
+  pAway = Math.max(0.05, Math.min(0.9, pAway - drift));
+
+  if (goalDiff > 0) {
+    pHome = pHome + (1 - pHome) * progress * Math.min(1, goalDiff * 0.4);
+    pAway = pAway * timeRemainingFactor * Math.max(0.05, 1 - goalDiff * 0.4);
+    pDraw = pDraw * timeRemainingFactor * Math.max(0.05, 1 - goalDiff * 0.4);
+  } else if (goalDiff < 0) {
+    const absDiff = Math.abs(goalDiff);
+    pAway = pAway + (1 - pAway) * progress * Math.min(1, absDiff * 0.4);
+    pHome = pHome * timeRemainingFactor * Math.max(0.05, 1 - absDiff * 0.4);
+    pDraw = pDraw * timeRemainingFactor * Math.max(0.05, 1 - absDiff * 0.4);
+  } else {
+    // Score is tied
+    pDraw = pDraw + (0.90 - pDraw) * progress;
+    pHome = pHome * timeRemainingFactor;
+    pAway = pAway * timeRemainingFactor;
+  }
+
+  const sum = pHome + pAway + pDraw;
+  pHome = Math.max(0.01, pHome / sum);
+  pAway = Math.max(0.01, pAway / sum);
+  pDraw = Math.max(0.01, pDraw / sum);
+
+  const homeOdds = Math.round(Math.max(1.02, Math.min(99.0, 1 / pHome)) * 100) / 100;
+  const awayOdds = Math.round(Math.max(1.02, Math.min(99.0, 1 / pAway)) * 100) / 100;
+  const drawOdds = Math.round(Math.max(1.02, Math.min(99.0, 1 / pDraw)) * 100) / 100;
+
+  return { home: homeOdds, away: awayOdds, draw: drawOdds };
+}
+
 async function ensureSim(matchId: string) {
   if (simulations.has(matchId)) return;
   const data = await queryOne<{
@@ -77,8 +130,14 @@ async function processMatch(
 
   if (state.minute >= 90) {
     state.active = false;
+    const finalOdds = calculateOddsFromScore(state.homeScore, state.awayScore, 90);
+    await updateMatchOdds(state.matchId, finalOdds.home, finalOdds.away, finalOdds.draw);
     const hash = await finalizeMatch(state.matchId, state.homeScore, state.awayScore);
     await settleAllForMatch(state.matchId, state.homeScore, state.awayScore, hash || "mock-hash", clients);
+    
+    const probHome = decimalToImpliedProb(finalOdds.home);
+    const probAway = decimalToImpliedProb(finalOdds.away);
+
     const snapshot: TxLineSnapshot = {
       match_id: state.matchId,
       home_team: match.home_team,
@@ -86,11 +145,11 @@ async function processMatch(
       status: "final",
       score_home: state.homeScore,
       score_away: state.awayScore,
-      odds_home: 0,
-      odds_away: 0,
-      odds_draw: 0,
-      implied_prob_home: 0,
-      implied_prob_away: 0,
+      odds_home: finalOdds.home,
+      odds_away: finalOdds.away,
+      odds_draw: finalOdds.draw,
+      implied_prob_home: Math.round(probHome * 10) / 10,
+      implied_prob_away: Math.round(probAway * 10) / 10,
       minute: 90,
       last_event: "Match finalized",
       timestamp: new Date().toISOString(),
@@ -100,6 +159,8 @@ async function processMatch(
   }
 
   const goalChance = 0.04;
+  let nextOdds = calculateOddsFromScore(state.homeScore, state.awayScore, state.minute);
+
   if (Math.random() < goalChance) {
     const scoringTeam = Math.random() < 0.5 ? "home" : "away";
     if (scoringTeam === "home") {
@@ -109,47 +170,36 @@ async function processMatch(
       state.awayScore += 1;
       state.lastEvent = `Goal! ${match.away_team} scored in minute ${state.minute}`;
     }
+    // Re-calculate odds immediately post-goal
+    nextOdds = calculateOddsFromScore(state.homeScore, state.awayScore, state.minute);
+    await updateMatchOdds(state.matchId, nextOdds.home, nextOdds.away, nextOdds.draw);
     await updateMatchScore(state.matchId, state.homeScore, state.awayScore, "live", state.lastEvent);
     await onGoal(state.matchId, scoringTeam, state.minute);
   } else {
-    // Read actual current odds from database
-    const currentOddsHome = Number(match.odds_home) || 2.0;
-    const currentOddsAway = Number(match.odds_away) || 2.0;
-    const currentOddsDraw = Number(match.odds_draw) || 3.0;
-
-    // Simulate minor random walk drift (approx ±0.01 - ±0.06 per tick)
-    const drift = (Math.random() - 0.5) * 0.12;
-    const nextOddsHome = Math.round(Math.max(1.05, Math.min(50, currentOddsHome + drift)) * 100) / 100;
-    const nextOddsAway = Math.round(Math.max(1.05, Math.min(50, currentOddsAway - drift)) * 100) / 100;
-    
-    // Slight drift on Draw odds
-    const drawDrift = (Math.random() - 0.5) * 0.04;
-    const nextOddsDraw = Math.round(Math.max(1.05, Math.min(50, currentOddsDraw + drawDrift)) * 100) / 100;
-
-    // Write updated drifted odds back to the database
-    await updateMatchOdds(state.matchId, nextOddsHome, nextOddsAway, nextOddsDraw);
+    // Normal minute tick
+    await updateMatchOdds(state.matchId, nextOdds.home, nextOdds.away, nextOdds.draw);
     await updateMatchScore(state.matchId, state.homeScore, state.awayScore, "live", state.lastEvent);
-
-    const probHome = decimalToImpliedProb(nextOddsHome);
-    const probAway = decimalToImpliedProb(nextOddsAway);
-
-    broadcast(clients, {
-      type: "match_update",
-      data: {
-        match_id: state.matchId,
-        status: "live",
-        score_home: state.homeScore,
-        score_away: state.awayScore,
-        odds_home: nextOddsHome,
-        odds_away: nextOddsAway,
-        odds_draw: nextOddsDraw,
-        implied_prob_home: Math.round(probHome * 10) / 10,
-        implied_prob_away: Math.round(probAway * 10) / 10,
-        minute: state.minute,
-        last_event: state.lastEvent,
-      },
-    });
   }
+
+  const probHome = decimalToImpliedProb(nextOdds.home);
+  const probAway = decimalToImpliedProb(nextOdds.away);
+
+  broadcast(clients, {
+    type: "match_update",
+    data: {
+      match_id: state.matchId,
+      status: "live",
+      score_home: state.homeScore,
+      score_away: state.awayScore,
+      odds_home: nextOdds.home,
+      odds_away: nextOdds.away,
+      odds_draw: nextOdds.draw,
+      implied_prob_home: Math.round(probHome * 10) / 10,
+      implied_prob_away: Math.round(probAway * 10) / 10,
+      minute: state.minute,
+      last_event: state.lastEvent,
+    },
+  });
 }
 
 export function startTxLineWorker(
