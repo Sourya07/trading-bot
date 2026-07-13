@@ -10,6 +10,63 @@ function broadcast(clients: Set<WebSocket>, msg: unknown) {
   });
 }
 
+async function generateLLMReasoning(
+  template: string,
+  event: string,
+  snapshot: Record<string, any>,
+  fallbackMessage: string
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return fallbackMessage;
+  }
+
+  try {
+    const prompt = `You are a high-frequency sports betting quantitative agent trading bot.
+Current Match State:
+- Teams: ${snapshot.home_team || "Home vs Away"}
+- Current Score: ${snapshot.score_home ?? 0} - ${snapshot.score_away ?? 0}
+- Current Odds: Home ${snapshot.odds_home ?? 2.0}, Away ${snapshot.odds_away ?? 2.0}
+- Strategy Active: ${template}
+- Event Trigger: ${event}
+
+Task: Write a 1-sentence, high-frequency quant trading log message in a dry, cyberpunk terminal format. Make it sound autonomous, analytical, and fast. Analyze the event and state.
+Constraints:
+1. Maximum 25 words.
+2. No markdown formatting (no bold, no italics).
+3. Do not include introductory text like "Log: " or "Agent: ".
+4. Use realistic financial/betting terms (e.g. implied probability shift, hedge offset, momentum bias, risk mitigation).
+
+Write the single line log now:`;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            maxOutputTokens: 60,
+            temperature: 0.7,
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      return fallbackMessage;
+    }
+
+    const data: any = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return text || fallbackMessage;
+  } catch (err) {
+    console.error("Gemini API error:", err);
+    return fallbackMessage;
+  }
+}
+
 export async function createStrategy(
   wallet: string,
   matchId: string,
@@ -76,9 +133,25 @@ export async function toggleAgent(
 
     const match = await getMatch(strategy.match_id);
 
-    await logAgentEvent(strategy.id, strategy.match_id, "info", active
+    const baseLogMsg = active
       ? `Agent started for ${match?.home_team} vs ${match?.away_team} using ${strategy.template.replace(/_/g, " ")} strategy. Monitoring TxLINE data for trigger conditions.`
-      : `Agent stopped. No longer monitoring ${match?.home_team} vs ${match?.away_team}.`, {});
+      : `Agent stopped. No longer monitoring ${match?.home_team} vs ${match?.away_team}.`;
+
+    const logMessage = await generateLLMReasoning(
+      strategy.template,
+      active ? "Agent strategy initialized and set to active." : "Agent strategy deactivated and standing down.",
+      {
+        home_team: match?.home_team,
+        away_team: match?.away_team,
+        score_home: match?.score_home,
+        score_away: match?.score_away,
+        odds_home: match?.odds_home,
+        odds_away: match?.odds_away,
+      },
+      baseLogMsg
+    );
+
+    await logAgentEvent(strategy.id, strategy.match_id, "info", logMessage, {});
 
     broadcast(clients, {
       type: "agent_event",
@@ -294,7 +367,14 @@ export async function handleGoalEvent(
         const hedgeSide = scoringTeam === "home" ? "home" : "away";
         const hedgeOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
 
-        const message = `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
+        const baseMessage = `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
+
+        const message = await generateLLMReasoning(
+          strategy.template,
+          `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored a goal. Triggering hedge offset on ${hedgeSide} with stake ${hedgeStake}.`,
+          snapshot,
+          baseMessage
+        );
 
         await logAgentEvent(strategy.id, matchId, "trigger", message, snapshot);
 
@@ -323,7 +403,15 @@ export async function handleGoalEvent(
           });
         }
       } else {
-        const message = `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. This aligns with your primary position on ${primarySide === "home" ? match.home_team : match.away_team}. No hedge needed — momentum is favorable.`;
+        const baseMessage = `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. This aligns with your primary position on ${primarySide === "home" ? match.home_team : match.away_team}. No hedge needed — momentum is favorable.`;
+
+        const message = await generateLLMReasoning(
+          strategy.template,
+          `Supported team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored a goal. Momentum is favorable. No hedge action required.`,
+          snapshot,
+          baseMessage
+        );
+
         await logAgentEvent(strategy.id, matchId, "info", message, snapshot);
         broadcast(clients, {
           type: "agent_event",
