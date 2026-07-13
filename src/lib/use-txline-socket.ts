@@ -75,7 +75,7 @@ export function useTxLineSocket(walletAddress?: string) {
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//${window.location.host}/ws`;
 
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let closed = false;
