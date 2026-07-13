@@ -260,7 +260,7 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
   // 10b. SELECT * FROM strategies WHERE match_id = $1 AND agent_active = true
   if (sql.includes("SELECT * FROM strategies WHERE match_id = $1 AND agent_active = true")) {
     const list = Array.from(inMemoryStore.strategies.values()).filter(
-      s => s.match_id === params?.[0] && s.agent_active === true
+      s => s.match_id === params?.[0] && !!s.agent_active
     );
     return list as unknown as T[];
   }
@@ -274,8 +274,8 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
       match_id: params?.[1],
       template: params?.[2],
       rule_config: typeof rawConfig === "string" ? JSON.parse(rawConfig) : rawConfig,
-      agent_active: params?.[4] || false,
-      anchor_strategy_signature: params?.[5] || null,
+      agent_active: false,
+      anchor_strategy_signature: params?.[4] || null,
       created_at: new Date().toISOString()
     };
     inMemoryStore.strategies.set(newStrat.id, newStrat);
