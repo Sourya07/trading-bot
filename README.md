@@ -13,9 +13,9 @@ Designed for the **TxLINE Data Layer Track** on Superteam Earn.
     1.  **Goal-Shift Hedge**: Automatically places cover positions on the opposing side when a goal is conceded to hedge downside exposure.
     2.  **Momentum Engine**: Detects rapid changes in implied probabilities and enters positions to ride shifts in score momentum.
     3.  **Mean Reversion**: Capitalizes on temporary odds spikes that drift away from the historical base rates.
-*   **Cryptographic Proof Anchoring**: Every odds update and agent trade is hashed using SHA256 and anchored to a simulated Solana proof ledger. Users can view verification logs, block timestamps, and cryptographic proof hashes directly on the terminal dashboard.
-*   **Live Area Charts & Live Counters**: Full SVG probability trend visualization showing active odds histories with glowing cyber-neon themes, side-by-side with animated score counters and live event ticker logs.
-*   **Serverless Database Layer**: Built on **Neon DB** using raw parameterized SQL migrations and seeding for ultra-fast, robust state persistence.
+*   **On-Chain Solana Integration**: Strategy registries and position entries are executed directly on the **Solana Devnet** via Phantom. When a match ends, the user signs a transaction on-chain calling the program's `settle_position` instruction to claim their payout.
+*   **Gemini 2.5 Flash Reasoning**: Integrates the **Gemini API** to analyze live scorelines, strategies, and odds in real-time, outputting dynamic quant-style reasoning logs directly to the terminal feed.
+*   **Neon DB with In-Memory Fallback**: Built on **Neon DB** using raw SQL migrations. If the remote database is unreachable, the server automatically falls back to an in-memory database mode with full live streams and simulations active.
 
 ---
 
@@ -27,23 +27,31 @@ Clone the repository and install dependencies:
 npm install
 ```
 
-### 2. Database Setup
-Ensure you have a PostgreSQL or Neon connection string configured in `.env`:
+### 2. Configuration (.env)
+Configure the following keys in your `.env` file:
 ```env
+# Database
 DATABASE_URL=postgresql://user:password@localhost:5432/txhedge
-```
 
-Run database migrations to initialize matches, strategies, positions, and logs:
-```bash
-npm run migrate
+# Solana (Devnet)
+SOLANA_PRIVATE_KEY=your_base58_private_key
+SOLANA_CLUSTER=devnet
+SOLANA_RPC_URL=https://api.devnet.solana.com
+
+# TxLINE Live Feed Credentials
+TXLINE_NETWORK=devnet
+TXLINE_JWT=your_jwt_token
+TXLINE_API_TOKEN=your_activated_api_token
+
+# Gemini AI reasoning
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ### 3. Run Development Server
-Start the client and the backend background worker concurrently:
+Start the client and Express backend concurrently:
 ```bash
 npm run dev
 ```
-
 Open `http://localhost:5173/` in your browser.
 
 ---
@@ -51,36 +59,48 @@ Open `http://localhost:5173/` in your browser.
 ## 📂 Project Architecture
 
 ```
-├── anchor/                  # Anchor Rust Solana smart contract (mocked)
+├── anchor/                  # Anchor Rust Solana smart contract
+│   └── programs/txhedge     # Instruction logic (create_strategy, create_position, settle_position)
 ├── server/                  
-│   ├── agent/               # Strategy Engine (Goal-Shift, Momentum, Mean Reversion)
-│   ├── workers/             # TxLINE feed ingestion worker & Match simulation loop
-│   ├── db.ts                # Neon Database clients & SQL queries
-│   ├── index.ts             # REST API & WebSocket server
-│   └── txline.ts            # TxLINE data schema parsing & odds calculations
+│   ├── agent/               # Strategy Engine & Gemini 2.5 reasoning logic
+│   ├── workers/             # TxLINE SSE feed worker & Simulation ticker loop
+│   ├── db.ts                # Neon Database clients & In-Memory fallback store
+│   ├── index.ts             # REST API, WebSocket server, & static asset serving
+│   └── txline.ts            # Fixture sync helper & snapshot parsing
 ├── src/                     
-│   ├── components/          # React components (HomeHero, FixtureLobby, TradingTerminal, Charts)
-│   ├── lib/                 # Phantom Wallet integration, API client, & WebSocket hooks
-│   └── App.tsx              # Page navigation & GPU Canvas video scrubber
+│   ├── components/          # React views (Lobby, TradingTerminal, Charts, ProofPanel)
+│   ├── lib/                 # Phantom Wallet adapter, API client, & Solana Anchor client
+│   └── App.tsx              # Page routing & 60FPS Video backdrop canvas
 ```
 
 ---
 
 ## 🛰️ TxLINE API & Data Ingestion
 
-TxHedge ingests granular feeds structured under the unified TxLINE schema:
+TxHedge ingests real-time sports odds and progression feeds from the following devnet endpoints:
 
-1.  **`/fixtures`**: Fetches all 6 World Cup demo matches, status indicators (`scheduled` / `live` / `final`), and base odds.
-2.  **`/fixtures/{fixture_id}/odds`**: Used by the `strategyEngine` to track live 3-way moneyline odds (Home, Draw, Away) and calculate implied probabilities (`1 / odds`).
-3.  **`/fixtures/{fixture_id}/scores`**: Listens to score change events and minute-by-minute updates. If a goal is detected, it triggers the active **Goal-Shift Hedge** strategy instantly.
+1.  **`/api/fixtures/snapshot?competitionId=72`** (HTTP GET): Fetches the initial fixtures, kickoff times, and participant details to seed the database on server start.
+2.  **`https://txline-dev.txodds.com/odds/stream`** (SSE): Persistently streams live 3-way moneyline odds (Home, Draw, Away) and updates implied probabilities dynamically.
+3.  **`https://txline-dev.txodds.com/scores/stream`** (SSE): Streams real-time score changes, elapsed minutes, and match status updates to trigger the agent's automated hedging decisions.
+
+---
+
+## ⛓️ On-Chain Anchor Program Details
+
+- **Program ID**: `BZ6W4B9Te3nnZWXd19QSaTXDxTF1rtC1je8roTDrorrk` (Deployed on Solana Devnet)
+- **Instructions Used**:
+  - `create_strategy`: Registers the active trading rules and SHA256 parameters on-chain.
+  - `create_position`: Deposits the credit stakes and entry odds bps on-chain.
+  - `settle_position`: Resolves payouts against verified final scores on-chain.
 
 ---
 
 ## 💬 Hackathon Feedback & Developer Experience
 
 ### What We Liked Most
-*   **Normalized JSON Schema**: The single, normalized schema across leagues and events made parsing odds and scoring objects incredibly simple. It saved us from writing custom adapters for different team structures.
-*   **Granularity of Feeds**: Having minute-by-minute progression and live events as separate fields made building the event-driven **Goal-Shift** agent logic clean and deterministic.
+*   **Normalized JSON Schema**: The single, normalized schema across competitions made parsing odds and scoring updates incredibly simple. It saved us from writing custom adapters.
+*   **Granularity of Feeds**: Having minute-by-minute progression and live events as separate SSE channels made building the event-driven **Goal-Shift** agent logic clean and deterministic.
 
 ### Areas of Friction
-*   **WebSocket Documentation**: Clarifying the exact real-time payload structures and event frames for live games in the developer docs would speed up initial mock integrations. We ended up writing our own robust socket worker wrapper (`useTxLineSocket`) to abstract reconnects and payload formatting.
+*   **SSE Authentication Challenges**: The token challenge registration is a bit complex for newcomers. We solved this by writing a custom one-time setup script (`txlineSetup.ts`) to manage registration and challenge signing programmatically.
+
