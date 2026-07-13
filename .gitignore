@@ -31,3 +31,6 @@ dist-ssr
 # Rust / Anchor target build files
 target/
 **/target/
+
+# Lockfiles
+package-lock.json
