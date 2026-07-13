@@ -1,21 +1,19 @@
+import { useState, useEffect } from "react";
 import { useTerminalStore } from "@/lib/store";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
-import { Info, Zap, CheckCircle, AlertTriangle, Bot } from "lucide-react";
+import { Info, Zap, CheckCircle, AlertTriangle, Bot, ChevronLeft, ChevronRight } from "lucide-react";
 
-const logVariants = {
-  hidden: { opacity: 0, x: 30, scale: 0.95 },
-  show: {
-    opacity: 1,
-    x: 0,
-    scale: 1,
-    transition: { type: "spring" as const, stiffness: 120, damping: 16 },
-  },
-  exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
-};
 
 export function AgentFeed() {
   const agentLogs = useTerminalStore((s) => s.agentLogs);
+  const [currentPage, setCurrentPage] = useState(0);
+  const LOGS_PER_PAGE = 3;
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [agentLogs.length]);
 
   if (agentLogs.length === 0) {
     return (
@@ -35,65 +33,97 @@ export function AgentFeed() {
     );
   }
 
+  const totalPages = Math.ceil(agentLogs.length / LOGS_PER_PAGE);
+  const paginatedLogs = agentLogs.slice(currentPage * LOGS_PER_PAGE, (currentPage + 1) * LOGS_PER_PAGE);
+
   return (
-    <ScrollArea className="flex-1 min-h-0">
-      <div className="space-y-2 pr-3">
-        <AnimatePresence initial={false}>
-          {agentLogs.map((log, i) => {
-            const icon =
-              log.event_type === "trigger" ? (
-                <Zap className="h-3.5 w-3.5 text-agent" />
-              ) : log.event_type === "settle" ? (
-                <CheckCircle className="h-3.5 w-3.5 text-profit" />
-              ) : log.event_type === "warning" ? (
-                <AlertTriangle className="h-3.5 w-3.5 text-loss" />
-              ) : (
-                <Info className="h-3.5 w-3.5 text-muted-foreground" />
-              );
+    <div className="flex-1 flex flex-col min-h-0">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-2 pr-3 pb-2">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, x: 15 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -15 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-2"
+            >
+              {paginatedLogs.map((log, index) => {
+                const globalIndex = currentPage * LOGS_PER_PAGE + index;
+                const icon =
+                  log.event_type === "trigger" ? (
+                    <Zap className="h-3.5 w-3.5 text-agent" />
+                  ) : log.event_type === "settle" ? (
+                    <CheckCircle className="h-3.5 w-3.5 text-profit" />
+                  ) : log.event_type === "warning" ? (
+                    <AlertTriangle className="h-3.5 w-3.5 text-loss" />
+                  ) : (
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  );
 
-            const borderClass =
-              log.event_type === "trigger"
-                ? "border-agent/25 bg-agent/5"
-                : log.event_type === "settle"
-                  ? "border-profit/25 bg-profit/5"
-                  : log.event_type === "warning"
-                    ? "border-loss/25 bg-loss/5"
-                    : "border-border/40 bg-border/3";
+                const borderClass =
+                  log.event_type === "trigger"
+                    ? "border-agent/25 bg-agent/5"
+                    : log.event_type === "settle"
+                      ? "border-profit/25 bg-profit/5"
+                      : log.event_type === "warning"
+                        ? "border-loss/25 bg-loss/5"
+                        : "border-border/40 bg-border/3";
 
-            const glowClass =
-              log.event_type === "trigger" ? "glow-agent" : log.event_type === "settle" ? "glow-profit" : "";
+                const glowClass =
+                  log.event_type === "trigger" ? "glow-agent" : log.event_type === "settle" ? "glow-profit" : "";
 
-            return (
-              <motion.div
-                key={log.id}
-                variants={logVariants}
-                initial="hidden"
-                animate="show"
-                exit="exit"
-                layout
-                className={`rounded-lg border p-3 ${borderClass} ${i === 0 ? glowClass : ""}`}
-              >
-                <div className="flex items-start gap-2.5">
-                  <motion.div
-                    className="mt-0.5 shrink-0"
-                    initial={{ scale: 0, rotate: -180 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: "spring", stiffness: 200, damping: 12, delay: 0.1 }}
+                return (
+                  <div
+                    key={log.id}
+                    className={`rounded-lg border p-3 ${borderClass} ${globalIndex === 0 ? glowClass : ""}`}
                   >
-                    {icon}
-                  </motion.div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs leading-relaxed">{log.message}</p>
-                    <p className="text-[10px] text-muted-foreground mt-1.5 font-mono-num">
-                      {new Date(log.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                    </p>
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 shrink-0">
+                        {icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs leading-relaxed">{log.message}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1.5 font-mono-num">
+                          {new Date(log.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-    </ScrollArea>
+                );
+              })}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </ScrollArea>
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t border-slate-900 pt-2.5 mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+            disabled={currentPage === 0}
+            className="h-7 w-7 p-0 border-slate-800 text-slate-400 hover:text-white cursor-pointer"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-[10px] text-slate-500 font-mono font-semibold">
+            Page {currentPage + 1} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+            disabled={currentPage === totalPages - 1}
+            className="h-7 w-7 p-0 border-slate-800 text-slate-400 hover:text-white cursor-pointer"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
