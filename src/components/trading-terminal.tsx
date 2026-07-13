@@ -528,7 +528,7 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
           </div>
 
           {/* Implied Probability & Odds Movement Chart */}
-          <motion.div custom={3} variants={panelVariants} initial="hidden" animate="show" className="flex-1 min-h-[300px]">
+          <motion.div custom={3} variants={panelVariants} initial="hidden" animate="show" className="h-[280px] w-full">
             <Card className="p-4 bg-[#0c1a24] border-slate-800 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm flex items-center gap-2 text-white">

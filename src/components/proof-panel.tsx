@@ -5,9 +5,9 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, ExternalLink, Copy, CheckCircle, Lock } from "lucide-react";
+import { ShieldCheck, ExternalLink, Copy, CheckCircle, Lock, ChevronLeft, ChevronRight } from "lucide-react";
 import { AnimatedNumber } from "./animated-number";
-import type { DevnetProgramStatus, SettlementData } from "@/lib/types";
+import type { DevnetProgramStatus } from "@/lib/types";
 
 export function ProofPanel({ matchId }: { matchId: string }) {
   const settlements = useTerminalStore((s) => s.settlements);
@@ -15,6 +15,11 @@ export function ProofPanel({ matchId }: { matchId: string }) {
   const currentMatch = useTerminalStore((s) => s.currentMatch);
   const [copied, setCopied] = useState<string | null>(null);
   const [devnetStatus, setDevnetStatus] = useState<DevnetProgramStatus | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [matchId, settlements.length]);
 
   useEffect(() => {
     api.getSettlements(matchId).then(setSettlements).catch(() => {});
@@ -108,8 +113,11 @@ export function ProofPanel({ matchId }: { matchId: string }) {
         </Badge>
       </div>
       <div className="space-y-3">
-        <AnimatePresence>
-          {settlements.map((s: SettlementData, i: number) => {
+        <AnimatePresence mode="wait">
+          {(() => {
+            const s = settlements[currentPage];
+            if (!s) return null;
+
             const match = currentMatch;
             const outcomeLabel = s.final_outcome === "home" ? match?.home_team : s.final_outcome === "away" ? match?.away_team : "Draw";
             const pnl = Number(s.pnl_credits);
@@ -120,9 +128,10 @@ export function ProofPanel({ matchId }: { matchId: string }) {
             return (
               <motion.div
                 key={s.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ type: "spring", stiffness: 100, damping: 14, delay: i * 0.1 }}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ type: "spring", stiffness: 120, damping: 15 }}
                 className={`rounded-lg border p-3 space-y-2.5 ${pnl >= 0 ? "border-profit/20 bg-profit/5" : "border-loss/20 bg-loss/5"}`}
               >
                 <div className="flex items-center gap-1.5">
@@ -170,8 +179,35 @@ export function ProofPanel({ matchId }: { matchId: string }) {
                 )}
               </motion.div>
             );
-          })}
+          })()}
         </AnimatePresence>
+
+        {/* Pagination controls */}
+        {settlements.length > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-900 pt-2.5 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+              disabled={currentPage === 0}
+              className="h-7 w-7 p-0 border-slate-800 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-[10px] text-slate-500 font-mono font-semibold">
+              Proof {currentPage + 1} of {settlements.length}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(settlements.length - 1, prev + 1))}
+              disabled={currentPage === settlements.length - 1}
+              className="h-7 w-7 p-0 border-slate-800 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   );
