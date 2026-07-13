@@ -1,21 +1,23 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useTerminalStore } from "./store";
+import { api } from "./api";
 import type { WsMessage } from "./types";
 
-export function useTxLineSocket() {
+export function useTxLineSocket(walletAddress?: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const updateMatchData = useTerminalStore((s) => s.updateMatchData);
   const addAgentLog = useTerminalStore((s) => s.addAgentLog);
   const addPosition = useTerminalStore((s) => s.addPosition);
   const addOddsPoint = useTerminalStore((s) => s.addOddsPoint);
   const setSettlements = useTerminalStore((s) => s.setSettlements);
-  const currentMatch = useTerminalStore((s) => s.currentMatch);
-
   const handleMessage = useCallback(
     (msg: WsMessage) => {
+      const currentMatch = useTerminalStore.getState().currentMatch;
+      if (!currentMatch) return;
+
       switch (msg.type) {
         case "match_update":
-          if (currentMatch && msg.data.match_id === currentMatch.match_id) {
+          if (msg.data.match_id === currentMatch.match_id) {
             updateMatchData(msg.data);
             if (msg.data.implied_prob_home && msg.data.implied_prob_away) {
               addOddsPoint({
@@ -29,7 +31,7 @@ export function useTxLineSocket() {
           }
           break;
         case "match_settled":
-          if (currentMatch && msg.data.matchId === currentMatch.match_id) {
+          if (msg.data.matchId === currentMatch.match_id) {
             updateMatchData({ status: "final", txline_result_hash: msg.data.hash });
           }
           break;
@@ -41,7 +43,7 @@ export function useTxLineSocket() {
             addAgentLog({
               id: crypto.randomUUID(),
               strategy_id: msg.data.strategy_id,
-              match_id: currentMatch?.match_id || null,
+              match_id: currentMatch.match_id,
               event_type: msg.data.event_type || "info",
               message: msg.data.message,
               txline_snapshot: {},
@@ -50,11 +52,16 @@ export function useTxLineSocket() {
           }
           break;
         case "position_settled":
-          setSettlements([]);
+          api.getSettlements(currentMatch.match_id).then(setSettlements).catch(() => {});
+          if (walletAddress) {
+            api.getWallet(walletAddress).then((w) => {
+              useTerminalStore.getState().setWalletBalance(w.balance);
+            }).catch(console.error);
+          }
           break;
       }
     },
-    [currentMatch, updateMatchData, addAgentLog, addPosition, addOddsPoint, setSettlements]
+    [walletAddress, updateMatchData, addAgentLog, addPosition, addOddsPoint, setSettlements]
   );
 
   useEffect(() => {

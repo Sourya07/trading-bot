@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import cors from "cors";
-import { query, queryOne } from "./db";
+import { query, queryOne, resetDatabase } from "./db";
 import { getMatches, getMatch, getOddsHistory, seedInitialOddsHistory } from "./txline";
 import {
   createStrategy,
@@ -15,7 +15,7 @@ import {
   handleGoalEvent,
   settleAllForMatch,
 } from "./agent/strategyEngine";
-import { startTxLineWorker, startMatchSimulation, fastForwardMatch } from "./workers/txlineWorker";
+import { startTxLineWorker, startMatchSimulation, fastForwardMatch, resetWorkerSimulations } from "./workers/txlineWorker";
 import { hashSnapshot } from "./txline";
 import { runMigrations } from "./migrate";
 import { getTxHedgeProgramStatus } from "./solana";
@@ -85,6 +85,33 @@ app.post("/api/fixtures/:matchId/start-simulation", async (req, res) => {
 app.post("/api/fixtures/:matchId/fast-forward", async (req, res) => {
   await fastForwardMatch(req.params.matchId);
   res.json({ ok: true });
+});
+
+app.post("/api/reset", async (req, res) => {
+  try {
+    await resetDatabase();
+    resetWorkerSimulations();
+    await seedInitialOddsHistory();
+    
+    // Broadcast reset event to clients
+    const broadcastMsg = JSON.stringify({
+      type: "match_update",
+      data: {
+        status: "scheduled",
+        score_home: 0,
+        score_away: 0,
+        minute: 0,
+        last_event: "Match reset to initial kickoff state."
+      }
+    });
+    clients.forEach((ws) => {
+      if (ws.readyState === 1) ws.send(broadcastMsg);
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Reset failed" });
+  }
 });
 
 app.post("/api/strategies", async (req, res) => {
@@ -213,8 +240,14 @@ const PORT = parseInt(process.env.PORT || "3001");
 
 server.listen(PORT, async () => {
   console.log(`TxHedge server running on port ${PORT}`);
-  await runMigrations();
-  await seedInitialOddsHistory();
+  try {
+    await runMigrations();
+    await seedInitialOddsHistory();
+  } catch (err) {
+    console.warn("Database connection or migration failed. Falling back to IN-MEMORY DATABASE mode.", err);
+    const { setUseInMemoryDb } = await import("./db");
+    setUseInMemoryDb(true);
+  }
   startTxLineWorker(clients, async (matchId, scoringTeam, minute) => {
     await handleGoalEvent(matchId, scoringTeam, minute, clients);
   });

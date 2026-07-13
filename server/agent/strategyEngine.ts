@@ -136,12 +136,29 @@ export async function createPosition(
   anchorSignature: string | null
 ): Promise<Position | null> {
   try {
-    return await queryOne<Position>(
+    const position = await queryOne<Position>(
       `INSERT INTO positions (strategy_id, match_id, wallet, side, entry_odds, stake_credits, status, position_type, trigger_reason, txline_snapshot_hash, anchor_position_signature)
        VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, $8, $9, $10)
        RETURNING *`,
       [strategyId, matchId, wallet, side, entryOdds, stakeCredits, positionType, triggerReason, txlineSnapshotHash, anchorSignature]
     );
+
+    // Deduct stake credits from wallet balance in DB
+    if (position) {
+      const walletRecord = await queryOne<{ balance: number }>(
+        `SELECT balance FROM wallets WHERE address = $1`,
+        [wallet]
+      );
+      if (walletRecord) {
+        const newBalance = Math.max(0, Number(walletRecord.balance) - Number(stakeCredits));
+        await query(
+          `UPDATE wallets SET balance = $1 WHERE address = $2`,
+          [newBalance, wallet]
+        );
+      }
+    }
+
+    return position;
   } catch (err) {
     console.error("Error creating position:", err);
     return null;
@@ -188,9 +205,10 @@ export async function settlePosition(
   if (!position) return;
 
   const won = position.side === finalOutcome;
+  const stakeVal = Number(position.stake_credits);
   const pnl = won
-    ? position.stake_credits * (Number(position.entry_odds) - 1)
-    : -position.stake_credits;
+    ? stakeVal * (Number(position.entry_odds) - 1)
+    : -stakeVal;
 
   await query(
     `UPDATE positions SET status = 'settled', pnl_credits = $1, settled_at = now() WHERE id = $2`,
@@ -209,7 +227,8 @@ export async function settlePosition(
   );
 
   if (wallet) {
-    const newBalance = Number(wallet.balance) + position.stake_credits + pnl;
+    // Explicitly parse balance, stake, and PnL to prevent string concatenation
+    const newBalance = Number(wallet.balance) + stakeVal + Number(pnl);
     await query(
       `UPDATE wallets SET balance = $1 WHERE address = $2`,
       [newBalance, position.wallet]

@@ -7,7 +7,7 @@ import { usePhantomWallet } from "./lib/use-phantom-wallet";
 import { useTerminalStore } from "./lib/store";
 import { api } from "./lib/api";
 import { Button } from "./components/ui/button";
-import { Menu } from "lucide-react";
+import { Menu, RotateCcw } from "lucide-react";
 
 export function App() {
   const shellRef = useRef<HTMLDivElement>(null);
@@ -164,6 +164,24 @@ export function App() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
             >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (confirm("Are you sure you want to reset all mock simulation database data, USDC wallet balance, and active strategies?")) {
+                    try {
+                      await fetch("/api/reset", { method: "POST" });
+                      window.location.reload();
+                    } catch (e) {
+                      alert("Reset failed");
+                    }
+                  }
+                }}
+                className="text-[10px] uppercase font-bold tracking-wider text-slate-400 hover:text-white hover:bg-slate-800/80 border-slate-800 gap-1.5 h-9"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset Data
+              </Button>
               <WalletButton wallet={wallet} balance={walletBalance} />
               <Button variant="outline" size="icon-sm" className="menu-button md:hidden" aria-label="Open menu">
                 <Menu className="h-4 w-4" />

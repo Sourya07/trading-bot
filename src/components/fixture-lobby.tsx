@@ -1,44 +1,32 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useTerminalStore } from "@/lib/store";
 import { api } from "@/lib/api";
 import type { MatchData } from "@/lib/types";
 import { GlowCard } from "./glow-card";
 import { AnimatedNumber } from "./animated-number";
-import { Activity, Zap, Shield, TrendingUp } from "lucide-react";
+import { Activity, Zap, Shield, Users, Flame, LineChart, Trophy } from "lucide-react";
+
+function getFlag(teamName: string): string {
+  const normalized = teamName.toLowerCase().trim();
+  if (normalized.includes("brazil")) return "🇧🇷";
+  if (normalized.includes("germany")) return "🇩🇪";
+  if (normalized.includes("argentina")) return "🇦🇷";
+  if (normalized.includes("france")) return "🇫🇷";
+  if (normalized.includes("spain")) return "🇪🇸";
+  if (normalized.includes("england")) return "🏴󠁧󠁢󠁥󠁮󠁧󠁿";
+  if (normalized.includes("portugal")) return "🇵🇹";
+  if (normalized.includes("netherlands")) return "🇳🇱";
+  if (normalized.includes("italy")) return "🇮🇹";
+  if (normalized.includes("belgium")) return "🇧🇪";
+  if (normalized.includes("mexico")) return "🇲🇽";
+  if (normalized.includes("usa") || normalized.includes("united states")) return "🇺🇸";
+  return "🏳️";
+}
 
 type Props = {
   onOpenMatch: (matchId: string) => void;
 };
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === "live") {
-    return (
-      <Badge variant="default" className="bg-profit/15 text-profit border border-profit/30 glow-profit">
-        <span className="relative mr-1.5 flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-profit opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-profit" />
-        </span>
-        LIVE
-      </Badge>
-    );
-  }
-  if (status === "final") {
-    return (
-      <Badge variant="secondary" className="text-muted-foreground">
-        FINAL
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="text-muted-foreground border-border/50">
-      SCHEDULED
-    </Badge>
-  );
-}
 
 export function FixtureLobby({ onOpenMatch }: Props) {
   const matches = useTerminalStore((s) => s.matches);
@@ -128,95 +116,132 @@ export function FixtureLobby({ onOpenMatch }: Props) {
 function FixtureCard({ match, onOpen }: { match: MatchData; onOpen: () => void }) {
   const kickoff = match.kickoff_time
     ? new Date(match.kickoff_time).toLocaleString("en-US", {
+        weekday: "short",
         month: "short",
         day: "numeric",
-        hour: "2-digit",
+        hour: "numeric",
         minute: "2-digit",
       })
     : "TBD";
 
+  // Simulate viewer count based on match ID to match the image's "27,884" / "10,022" style
+  const viewers = (
+    12400 +
+    ((match.match_id.charCodeAt(0) * 8741) % 18500)
+  ).toLocaleString();
+
+  // Generate bet percentage dynamically based on odds for a realistic "Popularity" flame badge
+  const oddsHomeNum = Number(match.odds_home) || 2.0;
+  const impliedHomeProb = Math.min(94, Math.max(28, Math.round(100 / oddsHomeNum) + (match.match_id.charCodeAt(0) % 10)));
+  
   return (
     <GlowCard
-      className="rounded-xl"
-      glowColor={match.status === "live" ? "oklch(0.72 0.2 148 / 15%)" : "oklch(0.72 0.19 195 / 12%)"}
+      className="rounded-xl overflow-hidden"
+      glowColor={match.status === "live" ? "oklch(0.72 0.2 148 / 15%)" : "oklch(0.72 0.19 195 / 10%)"}
       borderGlow={match.status === "live"}
     >
-      <Card className="p-5 cursor-pointer group" onClick={onOpen}>
-        {/* Status & time */}
-        <div className="flex items-center justify-between mb-5">
-          <StatusBadge status={match.status} />
-          <span className="text-[11px] text-muted-foreground font-mono-num">{kickoff}</span>
-        </div>
-
-        {/* Teams & Score */}
-        <div className="flex items-center justify-between mb-5">
-          {/* Home */}
-          <div className="flex-1 text-center">
-            <div className="relative h-14 w-14 mx-auto mb-2">
-              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/15 flex items-center justify-center animate-float" style={{ animationDelay: '0s' }}>
-                <span className="text-primary font-bold text-xl">{match.home_team[0]}</span>
-              </div>
-            </div>
-            <p className="font-semibold text-sm">{match.home_team}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">Home</p>
-          </div>
-
-          {/* Score */}
-          <div className="px-3">
-            {match.status === "live" || match.status === "final" ? (
-              <div className="text-center">
-                <div className="font-mono-num text-2xl font-bold flex items-center gap-2.5 score-3d">
-                  <AnimatedNumber value={match.score_home} decimals={0} className={match.status === "live" ? "text-glow-primary" : ""} />
-                  <span className="text-muted-foreground text-lg">:</span>
-                  <AnimatedNumber value={match.score_away} decimals={0} className={match.status === "live" ? "text-glow-primary" : ""} />
-                </div>
-              </div>
-            ) : (
-              <div className="text-muted-foreground text-sm font-mono-num px-3 py-1 rounded-lg bg-border/5 border border-border/30">
-                VS
-              </div>
+      <div 
+        onClick={onOpen}
+        className="p-5 cursor-pointer bg-[#0e212b] border border-[#1b3440] hover:border-[#274b5b] transition-all duration-300 rounded-xl group relative overflow-hidden flex flex-col justify-between min-h-[260px] select-none"
+      >
+        {/* Top Header Row */}
+        <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-300 font-semibold">{kickoff}</span>
+            <LineChart className="h-3.5 w-3.5 text-slate-500" />
+            <span className="text-[8px] font-bold text-white bg-slate-800 border border-slate-700/80 px-1 py-0.2 rounded-sm tracking-wide">SGM</span>
+            {match.status === "live" && (
+              <span className="flex h-2 w-2 relative ml-1">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-profit opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-profit"></span>
+              </span>
             )}
           </div>
-
-          {/* Away */}
-          <div className="flex-1 text-center">
-            <div className="relative h-14 w-14 mx-auto mb-2">
-              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-chart-2/20 to-chart-2/5 border border-chart-2/15 flex items-center justify-center animate-float" style={{ animationDelay: '0.5s' }}>
-                <span className="text-chart-2 font-bold text-xl">{match.away_team[0]}</span>
-              </div>
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1 text-slate-400">
+              <Users className="h-3.5 w-3.5" />
+              <span className="font-mono-num font-semibold">{viewers}</span>
             </div>
-            <p className="font-semibold text-sm">{match.away_team}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">Away</p>
+            <Trophy className={`h-3.5 w-3.5 text-amber-500/80 ${match.status === "live" ? "animate-spin" : ""}`} style={{ animationDuration: '6s' }} />
           </div>
         </div>
 
-        {/* Odds */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-5 px-2 py-2.5 rounded-lg bg-border/5 border border-border/20">
-          <div className="text-center flex-1">
-            <p className="text-[10px] uppercase tracking-wider mb-0.5">Home</p>
-            <AnimatedNumber value={Number(match.odds_home)} decimals={2} className="text-foreground font-semibold text-sm" />
+        {/* Middle Competitors Section */}
+        <div className="flex items-center justify-between py-2 mb-4">
+          {/* Home Flag */}
+          <div className="flex-shrink-0 text-4xl bg-slate-900/40 p-2 rounded-xl border border-slate-800/40 w-16 h-16 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform duration-300">
+            {getFlag(match.home_team)}
           </div>
-          <div className="h-6 w-px bg-border/30" />
-          <div className="text-center flex-1">
-            <p className="text-[10px] uppercase tracking-wider mb-0.5">Draw</p>
-            <AnimatedNumber value={Number(match.odds_draw)} decimals={2} className="text-foreground font-semibold text-sm" />
+
+          {/* Centered Competitor Names */}
+          <div className="flex-1 text-center px-4 space-y-1">
+            <div className="text-[15px] font-bold text-white tracking-wide truncate max-w-[150px] mx-auto group-hover:text-primary transition-colors">
+              {match.home_team}
+            </div>
+            
+            {/* Score or VS badge */}
+            <div className="flex items-center justify-center gap-2 py-0.5">
+              {match.status === "live" || match.status === "final" ? (
+                <div className="font-mono-num text-base font-extrabold text-emerald-400 bg-emerald-950/40 px-2.5 py-0.5 rounded border border-emerald-900/40 shadow-sm flex items-center gap-1.5">
+                  <AnimatedNumber value={match.score_home} decimals={0} />
+                  <span className="text-emerald-500/50 text-xs">-</span>
+                  <AnimatedNumber value={match.score_away} decimals={0} />
+                </div>
+              ) : (
+                <div className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest bg-slate-900/50 px-2 py-0.5 rounded border border-slate-800/40">
+                  VS
+                </div>
+              )}
+            </div>
+
+            <div className="text-[15px] font-bold text-white tracking-wide truncate max-w-[150px] mx-auto group-hover:text-primary transition-colors">
+              {match.away_team}
+            </div>
           </div>
-          <div className="h-6 w-px bg-border/30" />
-          <div className="text-center flex-1">
-            <p className="text-[10px] uppercase tracking-wider mb-0.5">Away</p>
-            <AnimatedNumber value={Number(match.odds_away)} decimals={2} className="text-foreground font-semibold text-sm" />
+
+          {/* Away Flag */}
+          <div className="flex-shrink-0 text-4xl bg-slate-900/40 p-2 rounded-xl border border-slate-800/40 w-16 h-16 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform duration-300">
+            {getFlag(match.away_team)}
           </div>
         </div>
 
-        {/* CTA */}
-        <Button
-          variant="outline"
-          className="w-full group-hover:bg-primary/10 group-hover:text-primary group-hover:border-primary/30 transition-all duration-300 gap-2"
-        >
-          <TrendingUp className="h-3.5 w-3.5" />
-          Open Terminal
-        </Button>
-      </Card>
+        {/* Popularity Badge Row */}
+        <div className="flex items-center gap-1.5 text-xs text-amber-500/90 font-medium mb-4 bg-amber-950/15 border border-amber-900/20 py-1.5 px-3 rounded-lg w-full">
+          <Flame className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+          <span className="truncate">{impliedHomeProb}% of 1x2 bets on {match.home_team}</span>
+        </div>
+
+        {/* Bottom Odds Row */}
+        <div className="grid grid-cols-3 gap-2">
+          {/* Home Odds */}
+          <div className="flex flex-col items-center justify-center bg-[#07131b] hover:bg-[#0c222e] border border-[#132a35] hover:border-[#1d4051] transition-all rounded-lg py-1.5 px-2 text-center">
+            <span className="text-[9px] text-slate-400 font-medium uppercase tracking-wider truncate max-w-full">
+              {match.home_team.split(" ")[0]}
+            </span>
+            <span className="text-xs font-mono-num font-bold text-[#38bdf8] mt-0.5">
+              <AnimatedNumber value={Number(match.odds_home)} decimals={2} />
+            </span>
+          </div>
+
+          {/* Draw Odds */}
+          <div className="flex flex-col items-center justify-center bg-[#07131b] hover:bg-[#0c222e] border border-[#132a35] hover:border-[#1d4051] transition-all rounded-lg py-1.5 px-2 text-center">
+            <span className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">Draw</span>
+            <span className="text-xs font-mono-num font-bold text-[#38bdf8] mt-0.5">
+              <AnimatedNumber value={Number(match.odds_draw)} decimals={2} />
+            </span>
+          </div>
+
+          {/* Away Odds */}
+          <div className="flex flex-col items-center justify-center bg-[#07131b] hover:bg-[#0c222e] border border-[#132a35] hover:border-[#1d4051] transition-all rounded-lg py-1.5 px-2 text-center">
+            <span className="text-[9px] text-slate-400 font-medium uppercase tracking-wider truncate max-w-full">
+              {match.away_team.split(" ")[0]}
+            </span>
+            <span className="text-xs font-mono-num font-bold text-[#38bdf8] mt-0.5">
+              <AnimatedNumber value={Number(match.odds_away)} decimals={2} />
+            </span>
+          </div>
+        </div>
+      </div>
     </GlowCard>
   );
 }

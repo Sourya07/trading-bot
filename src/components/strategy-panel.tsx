@@ -81,6 +81,11 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
         created_at: new Date().toISOString(),
       });
 
+      // Refresh wallet balance from API
+      await api.getWallet(wallet.address).then((w) => {
+        useTerminalStore.getState().setWalletBalance(w.balance);
+      }).catch(console.error);
+
       onCreated?.();
     } catch (e) {
       console.error(e);

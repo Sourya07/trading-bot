@@ -1,8 +1,9 @@
 import type { WebSocket } from "ws";
 import { query, queryOne } from "../db";
-import { getMatches, updateMatchScore, finalizeMatch } from "../txline";
+import { getMatches, getMatch, updateMatchOdds, updateMatchScore, finalizeMatch } from "../txline";
 import type { TxLineSnapshot } from "../txline";
 import { decimalToImpliedProb } from "../txline";
+import { settleAllForMatch } from "../agent/strategyEngine";
 
 type SimState = {
   matchId: string;
@@ -69,13 +70,18 @@ async function processMatch(
 
   state.minute += 1;
 
+  // Retrieve current match details from database
+  const match = await getMatch(state.matchId);
+  if (!match) return;
+
   if (state.minute >= 90) {
     state.active = false;
     const hash = await finalizeMatch(state.matchId, state.homeScore, state.awayScore);
+    await settleAllForMatch(state.matchId, state.homeScore, state.awayScore, hash || "mock-hash", clients);
     const snapshot: TxLineSnapshot = {
       match_id: state.matchId,
-      home_team: "",
-      away_team: "",
+      home_team: match.home_team,
+      away_team: match.away_team,
       status: "final",
       score_home: state.homeScore,
       score_away: state.awayScore,
@@ -97,18 +103,35 @@ async function processMatch(
     const scoringTeam = Math.random() < 0.5 ? "home" : "away";
     if (scoringTeam === "home") {
       state.homeScore += 1;
-      state.lastEvent = `Goal! ${scoringTeam === "home" ? "Home" : "Away"} scored in minute ${state.minute}`;
+      state.lastEvent = `Goal! ${match.home_team} scored in minute ${state.minute}`;
     } else {
       state.awayScore += 1;
-      state.lastEvent = `Goal! Away scored in minute ${state.minute}`;
+      state.lastEvent = `Goal! ${match.away_team} scored in minute ${state.minute}`;
     }
     await updateMatchScore(state.matchId, state.homeScore, state.awayScore, "live", state.lastEvent);
     await onGoal(state.matchId, scoringTeam, state.minute);
   } else {
-    const { homeOdds, awayOdds } = simulateOddsDrift(state);
-    const probHome = decimalToImpliedProb(homeOdds);
-    const probAway = decimalToImpliedProb(awayOdds);
+    // Read actual current odds from database
+    const currentOddsHome = Number(match.odds_home) || 2.0;
+    const currentOddsAway = Number(match.odds_away) || 2.0;
+    const currentOddsDraw = Number(match.odds_draw) || 3.0;
+
+    // Simulate minor random walk drift (approx ±0.01 - ±0.06 per tick)
+    const drift = (Math.random() - 0.5) * 0.12;
+    const nextOddsHome = Math.round(Math.max(1.05, Math.min(50, currentOddsHome + drift)) * 100) / 100;
+    const nextOddsAway = Math.round(Math.max(1.05, Math.min(50, currentOddsAway - drift)) * 100) / 100;
+    
+    // Slight drift on Draw odds
+    const drawDrift = (Math.random() - 0.5) * 0.04;
+    const nextOddsDraw = Math.round(Math.max(1.05, Math.min(50, currentOddsDraw + drawDrift)) * 100) / 100;
+
+    // Write updated drifted odds back to the database
+    await updateMatchOdds(state.matchId, nextOddsHome, nextOddsAway, nextOddsDraw);
     await updateMatchScore(state.matchId, state.homeScore, state.awayScore, "live", state.lastEvent);
+
+    const probHome = decimalToImpliedProb(nextOddsHome);
+    const probAway = decimalToImpliedProb(nextOddsAway);
+
     broadcast(clients, {
       type: "match_update",
       data: {
@@ -116,8 +139,9 @@ async function processMatch(
         status: "live",
         score_home: state.homeScore,
         score_away: state.awayScore,
-        odds_home: Math.round(homeOdds * 100) / 100,
-        odds_away: Math.round(awayOdds * 100) / 100,
+        odds_home: nextOddsHome,
+        odds_away: nextOddsAway,
+        odds_draw: nextOddsDraw,
         implied_prob_home: Math.round(probHome * 10) / 10,
         implied_prob_away: Math.round(probAway * 10) / 10,
         minute: state.minute,
@@ -179,4 +203,8 @@ export async function fastForwardMatch(matchId: string): Promise<void> {
     state.awayScore = 1;
   }
   await updateMatchScore(matchId, state.homeScore, state.awayScore, "live", "Fast-forwarded to minute 85");
+}
+
+export function resetWorkerSimulations() {
+  simulations.clear();
 }
