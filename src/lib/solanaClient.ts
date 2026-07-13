@@ -5,7 +5,7 @@ if (typeof window !== "undefined" && !window.Buffer) {
 
 import * as anchor from "@coral-xyz/anchor";
 import { Connection, PublicKey } from "@solana/web3.js";
-import idl from "../../anchor/target/idl/txhedge.json";
+import idl from "./txhedge.json";
 
 export const TXHEDGE_PROGRAM_ID = new PublicKey("BZ6W4B9Te3nnZWXd19QSaTXDxTF1rtC1je8roTDrorrk");
 const SOLANA_RPC_URL = "https://api.devnet.solana.com";
