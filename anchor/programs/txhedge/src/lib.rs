@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("TxHedge1111111111111111111111111111111111111");
+declare_id!("BZ6W4B9Te3nnZWXd19QSaTXDxTF1rtC1je8roTDrorrk");
 
 #[program]
 pub mod txhedge {
@@ -81,7 +81,7 @@ pub mod txhedge {
         let pnl = if won {
             let entry_odds = position.entry_odds_bps as i128;
             let stake = position.stake as i128;
-            stake * (entry_odcs - 10000) / 10000
+            stake * (entry_odds - 10000) / 10000
         } else {
             -(position.stake as i128)
         };

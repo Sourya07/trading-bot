@@ -69,6 +69,18 @@ export type SettlementData = {
   positions?: PositionData;
 };
 
+export type DevnetProgramStatus = {
+  cluster: string;
+  rpcUrl: string;
+  programId: string;
+  deployed: boolean;
+  executable: boolean;
+  owner: string | null;
+  lamports: number | null;
+  explorerUrl: string;
+  error: string | null;
+};
+
 export type OddsHistoryPoint = {
   recorded_at: string;
   odds_home: number;

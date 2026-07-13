@@ -51,6 +51,8 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
   const liveMinute = useTerminalStore((s) => s.liveMinute);
   const lastEvent = useTerminalStore((s) => s.lastEvent);
 
+  const walletBalance = useTerminalStore((s) => s.walletBalance);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -141,7 +143,9 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
                 <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
                 <div className="text-right">
                   <p className="text-[10px] text-muted-foreground">Credits</p>
-                  <p className="font-mono-num font-semibold text-xs">1,000</p>
+                  <p className="font-mono-num font-semibold text-xs text-emerald-400">
+                    <AnimatedNumber value={walletBalance} decimals={0} /> USDC
+                  </p>
                 </div>
               </div>
             )}

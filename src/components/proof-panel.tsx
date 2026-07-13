@@ -7,17 +7,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ExternalLink, Copy, CheckCircle, Lock } from "lucide-react";
 import { AnimatedNumber } from "./animated-number";
-import type { SettlementData } from "@/lib/types";
+import type { DevnetProgramStatus, SettlementData } from "@/lib/types";
 
 export function ProofPanel({ matchId }: { matchId: string }) {
   const settlements = useTerminalStore((s) => s.settlements);
   const setSettlements = useTerminalStore((s) => s.setSettlements);
   const currentMatch = useTerminalStore((s) => s.currentMatch);
   const [copied, setCopied] = useState<string | null>(null);
+  const [devnetStatus, setDevnetStatus] = useState<DevnetProgramStatus | null>(null);
 
   useEffect(() => {
     api.getSettlements(matchId).then(setSettlements).catch(() => {});
   }, [matchId, setSettlements]);
+
+  useEffect(() => {
+    api.getDevnetStatus().then(setDevnetStatus).catch(() => {});
+  }, []);
 
   const copyText = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -29,17 +34,56 @@ export function ProofPanel({ matchId }: { matchId: string }) {
     return (
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-3">
-          <div className="h-8 w-8 rounded-lg border border-border/30 flex items-center justify-center">
-            <Lock className="h-4 w-4 text-muted-foreground opacity-50" />
+          <div className={`h-8 w-8 rounded-lg border flex items-center justify-center ${
+            devnetStatus?.deployed ? "border-profit/25 bg-profit/10" : "border-border/30"
+          }`}>
+            {devnetStatus?.deployed ? (
+              <ShieldCheck className="h-4 w-4 text-profit" />
+            ) : (
+              <Lock className="h-4 w-4 text-muted-foreground opacity-50" />
+            )}
           </div>
           <div>
             <h3 className="font-semibold text-sm">Settlement Proof</h3>
-            <p className="text-[10px] text-muted-foreground">On-chain verification</p>
+            <p className="text-[10px] text-muted-foreground">
+              {devnetStatus?.cluster ? `Solana ${devnetStatus.cluster}` : "On-chain verification"}
+            </p>
           </div>
+          {devnetStatus?.deployed && (
+            <Badge variant="outline" className="ml-auto text-xs text-profit border-profit/25 bg-profit/8">
+              Program live
+            </Badge>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Settlement receipts with TxLINE result hashes will appear here once the match is finalized and positions are settled on-chain.
-        </p>
+        {devnetStatus ? (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              TxHedge is connected to the deployed devnet program. Settlement receipts will appear here once this match is finalized.
+            </p>
+            <div className="rounded-lg border border-border/30 bg-border/5 p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Program ID</span>
+                <Button variant="ghost" size="sm" className="h-5 px-1.5" onClick={() => copyText(devnetStatus.programId, "program")}>
+                  {copied === "program" ? <CheckCircle className="h-3 w-3 text-profit" /> : <Copy className="h-3 w-3" />}
+                </Button>
+              </div>
+              <p className="break-all font-mono-num text-[10px] text-foreground/80">{devnetStatus.programId}</p>
+              {devnetStatus.error && (
+                <p className="text-[10px] text-loss leading-relaxed">{devnetStatus.error}</p>
+              )}
+              <a href={devnetStatus.explorerUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="mt-1 w-full text-xs gap-1.5 border-primary/20 hover:bg-primary/5">
+                  <ExternalLink className="h-3 w-3" />
+                  View program on Solscan
+                </Button>
+              </a>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Checking Solana devnet program status...
+          </p>
+        )}
       </Card>
     );
   }

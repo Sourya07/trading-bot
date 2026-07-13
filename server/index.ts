@@ -18,6 +18,7 @@ import {
 import { startTxLineWorker, startMatchSimulation, fastForwardMatch } from "./workers/txlineWorker";
 import { hashSnapshot } from "./txline";
 import { runMigrations } from "./migrate";
+import { getTxHedgeProgramStatus } from "./solana";
 
 const app = express();
 app.use(cors());
@@ -69,6 +70,11 @@ app.get("/api/fixtures/:matchId/odds-history", async (req, res) => {
   const limit = parseInt(req.query.limit as string) || 100;
   const history = await getOddsHistory(req.params.matchId, limit);
   res.json(history);
+});
+
+app.get("/api/devnet/status", async (_req, res) => {
+  const status = await getTxHedgeProgramStatus();
+  res.json(status);
 });
 
 app.post("/api/fixtures/:matchId/start-simulation", async (req, res) => {

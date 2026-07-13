@@ -1,4 +1,4 @@
-import type { MatchData, StrategyData, PositionData, AgentLogData, SettlementData, OddsHistoryPoint } from "./types";
+import type { MatchData, StrategyData, PositionData, AgentLogData, SettlementData, OddsHistoryPoint, DevnetProgramStatus } from "./types";
 
 const API_BASE = "/api";
 
@@ -15,6 +15,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getDevnetStatus: () => fetchJson<DevnetProgramStatus>(`${API_BASE}/devnet/status`),
+
   getFixtures: () => fetchJson<MatchData[]>(`${API_BASE}/fixtures`),
 
   getMatch: (matchId: string) => fetchJson<MatchData>(`${API_BASE}/fixtures/${matchId}`),
