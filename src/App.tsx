@@ -278,7 +278,7 @@ function AmbientVideoBackground() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
 
-    const frameCount = 75; // Number of frames to extract
+    const frameCount = 40; // Number of frames to extract
     const bitmaps: ImageBitmap[] = [];
 
     video.onloadedmetadata = async () => {
@@ -366,14 +366,7 @@ function AmbientVideoBackground() {
           }
         }
       } else {
-        // Fallback seeking on the video element before cache completes
-        const video = backgroundVideoRef.current;
-        if (video && Number.isFinite(video.duration) && video.duration > 0) {
-          const targetTime = currentProgress * Math.max(video.duration - 0.08, 0);
-          if (Math.abs(video.currentTime - targetTime) > 0.015) {
-            video.currentTime = targetTime;
-          }
-        }
+        // Fallback: stay static or auto-play softly before cache completes
       }
 
       frame = requestAnimationFrame(updateLoop);
