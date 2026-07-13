@@ -163,9 +163,9 @@ export function ProofPanel({ matchId }: { matchId: string }) {
                   </a>
                 )}
                 {!s.anchor_settle_signature && (
-                  <div className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+                  <div className="text-[10px] text-amber-400/80 italic flex items-center gap-1">
                     <Lock className="h-3 w-3" />
-                    On-chain settlement signature pending deployment
+                    On-chain payout pending claim — click "Claim Payout" in the positions table to settle.
                   </div>
                 )}
               </motion.div>

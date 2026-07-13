@@ -3,7 +3,7 @@ import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import cors from "cors";
 import { query, queryOne, resetDatabase } from "./db";
-import { getMatches, getMatch, getOddsHistory, seedInitialOddsHistory } from "./txline";
+import { getMatches, getMatch, getOddsHistory, seedInitialOddsHistory, syncTxLineMatches } from "./txline";
 import {
   createStrategy,
   getStrategies,
@@ -91,6 +91,7 @@ app.post("/api/reset", async (req, res) => {
   try {
     await resetDatabase();
     resetWorkerSimulations();
+    await syncTxLineMatches();
     await seedInitialOddsHistory();
     
     // Broadcast reset event to clients
@@ -115,12 +116,18 @@ app.post("/api/reset", async (req, res) => {
 });
 
 app.post("/api/strategies", async (req, res) => {
-  const { wallet, match_id, template, rule_config } = req.body;
+  const { wallet, match_id, template, rule_config, anchor_strategy_signature } = req.body;
   if (!wallet || !match_id) {
     res.status(400).json({ error: "wallet and match_id are required" });
     return;
   }
-  const strategy = await createStrategy(wallet, match_id, template || "goal_shift_hedge", rule_config || {});
+  const strategy = await createStrategy(
+    wallet,
+    match_id,
+    template || "goal_shift_hedge",
+    rule_config || {},
+    anchor_strategy_signature || null
+  );
   res.json(strategy);
 });
 
@@ -156,7 +163,7 @@ app.get("/api/strategies/:strategyId/positions", async (req, res) => {
 });
 
 app.post("/api/positions", async (req, res) => {
-  const { strategy_id, match_id, wallet, side, entry_odds, stake_credits, position_type, trigger_reason } = req.body;
+  const { strategy_id, match_id, wallet, side, entry_odds, stake_credits, position_type, trigger_reason, anchor_position_signature } = req.body;
   if (!strategy_id || !match_id || !wallet || !side) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -178,7 +185,7 @@ app.post("/api/positions", async (req, res) => {
     position_type || "primary",
     trigger_reason || "Manual position",
     snapshotHash,
-    null
+    anchor_position_signature || null
   );
   res.json(position);
 });
@@ -218,6 +225,19 @@ app.get("/api/wallet/:address", async (req, res) => {
   }
 });
 
+app.post("/api/settlements/:positionId/anchor-signature", async (req, res) => {
+  const { signature } = req.body;
+  try {
+    await query(
+      `UPDATE settlements SET anchor_settle_signature = $1 WHERE position_id = $2`,
+      [signature, req.params.positionId]
+    );
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Unknown error" });
+  }
+});
+
 app.get("/api/settlements/:matchId", async (req, res) => {
   try {
     // Join settlements with positions to replicate Supabase's `select("*, positions(*)")`
@@ -242,11 +262,18 @@ server.listen(PORT, async () => {
   console.log(`TxHedge server running on port ${PORT}`);
   try {
     await runMigrations();
+    await syncTxLineMatches();
     await seedInitialOddsHistory();
   } catch (err) {
     console.warn("Database connection or migration failed. Falling back to IN-MEMORY DATABASE mode.", err);
     const { setUseInMemoryDb } = await import("./db");
     setUseInMemoryDb(true);
+    try {
+      await syncTxLineMatches();
+      await seedInitialOddsHistory();
+    } catch (seedErr) {
+      console.error("Error seeding in-memory database:", seedErr);
+    }
   }
   startTxLineWorker(clients, async (matchId, scoringTeam, minute) => {
     await handleGoalEvent(matchId, scoringTeam, minute, clients);

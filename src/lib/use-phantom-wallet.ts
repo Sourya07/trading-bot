@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { PublicKey } from "@solana/web3.js";
 
 type PhantomProvider = {
   connect: () => Promise<{ publicKey: { toString: () => string } }>;
@@ -6,6 +7,9 @@ type PhantomProvider = {
   on: (event: string, handler: (...args: unknown[]) => void) => void;
   isConnected: boolean;
   publicKey: { toString: () => string } | null;
+  signTransaction?: (transaction: any) => Promise<any>;
+  signAllTransactions?: (transactions: any[]) => Promise<any[]>;
+  signMessage?: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
 };
 
 declare global {
@@ -93,5 +97,17 @@ export function usePhantomWallet() {
     setAddress(null);
   }, [getProvider]);
 
-  return { connected, address, connecting, connect, disconnect };
+  const provider = getProvider();
+
+  return {
+    connected,
+    address,
+    connecting,
+    connect,
+    disconnect,
+    publicKey: provider?.publicKey ? new PublicKey(provider.publicKey.toString()) : null,
+    signTransaction: provider?.signTransaction ? (tx: any) => provider.signTransaction!(tx) : undefined,
+    signAllTransactions: provider?.signAllTransactions ? (txs: any[]) => provider.signAllTransactions!(txs) : undefined,
+    signMessage: provider?.signMessage ? (msg: Uint8Array) => provider.signMessage!(msg) : undefined,
+  };
 }

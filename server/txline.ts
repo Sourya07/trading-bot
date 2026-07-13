@@ -242,3 +242,89 @@ export async function getLatestSnapshot(matchId: string): Promise<TxLineSnapshot
     timestamp: new Date().toISOString(),
   };
 }
+
+export async function syncTxLineMatches(): Promise<void> {
+  try {
+    const { hasTxLineCredentials, TXLINE_API_BASE } = await import("./txlineApi");
+    if (!hasTxLineCredentials()) {
+      console.log("[TxLINE] Credentials not configured. Using fallback local matches.");
+      return;
+    }
+
+    const jwt = process.env.TXLINE_JWT;
+    const apiToken = process.env.TXLINE_API_TOKEN;
+    const currentEpochDay = Math.floor(Date.now() / 86400000);
+    const startEpoch = currentEpochDay - 10;
+
+    console.log(`[TxLINE] Fetching fixtures starting from epoch day ${startEpoch}...`);
+    const res = await fetch(`${TXLINE_API_BASE}/fixtures/snapshot?competitionId=72&startEpochDay=${startEpoch}`, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "X-Api-Token": apiToken!,
+      }
+    });
+
+    if (!res.ok) {
+      console.warn(`[TxLINE] Fixture sync request failed: ${res.status}`);
+      return;
+    }
+
+    const fixtures = await res.json() as any[];
+    console.log(`[TxLINE] Found ${fixtures.length} fixtures on devnet.`);
+
+    const selected = fixtures
+      .sort((a, b) => Number(a.StartTime) - Number(b.StartTime))
+      .slice(0, 6);
+
+    if (selected.length === 0) {
+      console.log("[TxLINE] No fixtures returned by API. Using fallback mock matches.");
+      return;
+    }
+
+    for (let i = 0; i < selected.length; i++) {
+      const f = selected[i];
+      const matchId = `wc-2026-00${i + 1}`;
+      const kickoff = new Date(f.StartTime || Date.now()).toISOString();
+      const homeTeam = f.Participant1 || "Home Team";
+      const awayTeam = f.Participant2 || "Away Team";
+
+      console.log(`[TxLINE] Syncing match ${matchId}: ${homeTeam} vs ${awayTeam} (FixtureId: ${f.FixtureId})`);
+
+      const oddsHome = i === 0 ? 2.10 : i === 1 ? 1.85 : i === 2 ? 2.45 : i === 3 ? 2.65 : i === 4 ? 2.30 : 3.10;
+      const oddsAway = i === 0 ? 3.40 : i === 1 ? 3.10 : i === 2 ? 2.70 : i === 3 ? 2.50 : i === 4 ? 2.80 : 2.20;
+      const oddsDraw = i === 0 ? 2.56 : i === 1 ? 3.20 : i === 2 ? 3.10 : i === 3 ? 3.30 : i === 4 ? 3.20 : 3.15;
+
+      const txlineData = JSON.stringify({
+        fixtureId: f.FixtureId,
+        participant1Id: f.Participant1Id,
+        participant2Id: f.Participant2Id,
+        gameState: f.GameState
+      });
+
+      const homeProb = Math.round((1 / oddsHome) * 100 * 10) / 10;
+      const awayProb = Math.round((1 / oddsAway) * 100 * 10) / 10;
+
+      await query(`
+        INSERT INTO matches (
+          match_id, home_team, away_team, status, score_home, score_away, 
+          kickoff_time, odds_home, odds_away, odds_draw, implied_prob_home, implied_prob_away, 
+          txline_data, txline_result_hash, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
+        ON CONFLICT (match_id) DO UPDATE SET
+          home_team = EXCLUDED.home_team,
+          away_team = EXCLUDED.away_team,
+          kickoff_time = EXCLUDED.kickoff_time,
+          txline_data = EXCLUDED.txline_data,
+          updated_at = now()
+      `, [
+        matchId, homeTeam, awayTeam, "scheduled", 0, 0,
+        kickoff, oddsHome, oddsAway, oddsDraw, homeProb, awayProb,
+        txlineData, null
+      ]);
+    }
+
+    console.log("[TxLINE] Successfully synced fixtures with database.");
+  } catch (err) {
+    console.error("[TxLINE] Error syncing matches:", err);
+  }
+}

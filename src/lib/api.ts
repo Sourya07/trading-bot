@@ -30,10 +30,10 @@ export const api = {
   fastForward: (matchId: string) =>
     fetchJson<{ ok: boolean }>(`${API_BASE}/fixtures/${matchId}/fast-forward`, { method: "POST" }),
 
-  createStrategy: (wallet: string, matchId: string, template: string, ruleConfig: Record<string, unknown>) =>
+  createStrategy: (wallet: string, matchId: string, template: string, ruleConfig: Record<string, unknown>, anchorStrategySignature?: string | null) =>
     fetchJson<StrategyData>(`${API_BASE}/strategies`, {
       method: "POST",
-      body: JSON.stringify({ wallet, match_id: matchId, template, rule_config: ruleConfig }),
+      body: JSON.stringify({ wallet, match_id: matchId, template, rule_config: ruleConfig, anchor_strategy_signature: anchorStrategySignature }),
     }),
 
   getStrategies: (wallet: string) =>
@@ -60,10 +60,14 @@ export const api = {
     stake_credits: number;
     position_type: string;
     trigger_reason: string;
+    anchor_position_signature?: string | null;
   }) =>
     fetchJson<PositionData>(`${API_BASE}/positions`, {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        anchor_position_signature: data.anchor_position_signature
+      }),
     }),
 
   getMatchPositions: (matchId: string) =>
@@ -74,4 +78,10 @@ export const api = {
 
   getSettlements: (matchId: string) =>
     fetchJson<SettlementData[]>(`${API_BASE}/settlements/${matchId}`),
+
+  recordSettlementSignature: (positionId: string, signature: string) =>
+    fetchJson<{ ok: boolean }>(`${API_BASE}/settlements/${positionId}/anchor-signature`, {
+      method: "POST",
+      body: JSON.stringify({ signature }),
+    }),
 };

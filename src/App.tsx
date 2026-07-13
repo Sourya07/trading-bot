@@ -34,7 +34,7 @@ export function App() {
     let targetY = window.scrollY;
     let smoothY = window.scrollY;
     let previousY = window.scrollY;
-    let idleTimer: ReturnType<typeof window.setTimeout>;
+    let idleTimer: any;
 
     const setSettled = () => {
       shellRef.current?.setAttribute("data-scroll-state", "settled");

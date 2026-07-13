@@ -271,7 +271,7 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
       template: params?.[2],
       rule_config: typeof rawConfig === "string" ? JSON.parse(rawConfig) : rawConfig,
       agent_active: params?.[4] || false,
-      anchor_strategy_signature: null,
+      anchor_strategy_signature: params?.[5] || null,
       created_at: new Date().toISOString()
     };
     inMemoryStore.strategies.set(newStrat.id, newStrat);
@@ -454,6 +454,47 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
     };
     inMemoryStore.settlements.set(newSettle.id, newSettle);
     return [newSettle] as unknown as T[];
+  }
+
+  // 28. INSERT INTO matches (with ON CONFLICT support)
+  if (sql.includes("INSERT INTO matches")) {
+    const matchId = params?.[0];
+    const homeTeam = params?.[1];
+    const awayTeam = params?.[2];
+    const status = params?.[3];
+    const scoreHome = params?.[4];
+    const scoreAway = params?.[5];
+    const kickoffTime = params?.[6];
+    const oddsHome = params?.[7];
+    const oddsAway = params?.[8];
+    const oddsDraw = params?.[9];
+    const impliedProbHome = params?.[10];
+    const impliedProbAway = params?.[11];
+    const txlineData = params?.[12];
+    
+    let parsedData = txlineData;
+    if (typeof txlineData === "string") {
+      try { parsedData = JSON.parse(txlineData); } catch {}
+    }
+    
+    inMemoryStore.matches.set(matchId, {
+      match_id: matchId,
+      home_team: homeTeam,
+      away_team: awayTeam,
+      status,
+      score_home: scoreHome,
+      score_away: scoreAway,
+      kickoff_time: kickoffTime,
+      odds_home: oddsHome,
+      odds_away: oddsAway,
+      odds_draw: oddsDraw,
+      implied_prob_home: impliedProbHome,
+      implied_prob_away: impliedProbAway,
+      txline_data: parsedData,
+      txline_result_hash: null,
+      updated_at: new Date().toISOString()
+    });
+    return [] as unknown as T[];
   }
 
   return [] as unknown as T[];

@@ -3,7 +3,8 @@ import { query, queryOne } from "../db";
 import { getMatches, getMatch, updateMatchOdds, updateMatchScore, finalizeMatch } from "../txline";
 import type { TxLineSnapshot } from "../txline";
 import { decimalToImpliedProb } from "../txline";
-import { settleAllForMatch } from "../agent/strategyEngine";
+import { settleAllForMatch, getOpenPositions } from "../agent/strategyEngine";
+import { hasTxLineCredentials, connectOddsStream, connectScoresStream } from "../txlineApi";
 
 type SimState = {
   matchId: string;
@@ -155,23 +156,59 @@ export function startTxLineWorker(
   clients: Set<WebSocket>,
   onGoal: (matchId: string, scoringTeam: "home" | "away", minute: number) => Promise<void>
 ) {
+  // Start simulation loop (poller runs every 3s)
   setInterval(async () => {
     const matches = await getMatches();
     for (const match of matches) {
+      // Self-healing: if match is already finalized but has open positions, settle them!
+      if (match.status === "final") {
+        try {
+          const openPositions = await getOpenPositions(match.match_id);
+          if (openPositions.length > 0) {
+            console.log(`[TxLINE] Auto-settling ${openPositions.length} open positions for finalized match ${match.match_id}`);
+            await settleAllForMatch(
+              match.match_id,
+              match.score_home,
+              match.score_away,
+              match.txline_result_hash || "mock-hash",
+              clients
+            );
+          }
+        } catch (err) {
+          console.error("[TxLINE] Self-healing settlement check failed:", err);
+        }
+      }
+
       await ensureSim(match.match_id);
       const state = simulations.get(match.match_id);
       if (!state) continue;
 
-      if (match.status === "live" || state.active) {
-        if (!state.active && match.status === "live") {
-          state.active = true;
-        }
+      if (state.active) {
         await processMatch(state, clients, onGoal);
       }
     }
 
     broadcast(clients, { type: "fixtures_update", data: { count: matches.length } });
   }, 3000);
+
+  // If TxLINE API credentials exist, connect to live SSE streams
+  if (hasTxLineCredentials()) {
+    console.log("[TxLINE] Connecting to live SSE data streams...");
+    
+    // Connect to scores stream to get live minute, scores, and events
+    connectScoresStream((event, data: any) => {
+      if (!data || !data.fixtureId) return;
+      handleLiveScoreUpdate(data, clients, onGoal);
+    }).catch(err => console.error("[TxLINE] Scores stream failed to start:", err));
+
+    // Connect to odds stream to get live odds updates
+    connectOddsStream((event, data: any) => {
+      if (!data || !data.FixtureId) return;
+      handleLiveOddsUpdate(data, clients);
+    }).catch(err => console.error("[TxLINE] Odds stream failed to start:", err));
+  } else {
+    console.log("[TxLINE] No credentials configured. Running in local simulation mode.");
+  }
 }
 
 export async function startMatchSimulation(matchId: string): Promise<void> {
@@ -207,4 +244,137 @@ export async function fastForwardMatch(matchId: string): Promise<void> {
 
 export function resetWorkerSimulations() {
   simulations.clear();
+}
+
+// ─── Live Feed Event Handlers ────────────────────────────────────────
+
+async function getMatchByFixtureId(fixtureId: number) {
+  const matches = await getMatches();
+  return matches.find((m: any) => {
+    try {
+      const data = typeof m.txline_data === "string" ? JSON.parse(m.txline_data) : m.txline_data;
+      return data && Number(data.fixtureId) === Number(fixtureId);
+    } catch {
+      return false;
+    }
+  }) || null;
+}
+
+async function handleLiveScoreUpdate(data: any, clients: Set<WebSocket>, onGoal: any) {
+  const match = await getMatchByFixtureId(data.fixtureId);
+  if (!match) return;
+  
+  const matchId = match.match_id;
+  const simState = simulations.get(matchId);
+  
+  // If the user has manually started a simulation for this match, ignore live feeds to avoid collisions
+  if (simState && simState.active) {
+    return;
+  }
+  
+  const scoreHome = Number(data.homeScore ?? match.score_home);
+  const scoreAway = Number(data.awayScore ?? match.score_away);
+  const minute = Number(data.minute ?? 0);
+  const gameState = data.gameState || "live";
+  
+  let status = "live";
+  if (data.action === "game_finalised" || data.statusId === 100 || data.period === 100) {
+    status = "final";
+  } else if (gameState === "1") {
+    status = "scheduled";
+  }
+  
+  const homeGoal = scoreHome > match.score_home;
+  const awayGoal = scoreAway > match.score_away;
+  const lastEvent = homeGoal 
+    ? `Goal! ${match.home_team} scored in minute ${minute}`
+    : awayGoal 
+      ? `Goal! ${match.away_team} scored in minute ${minute}`
+      : match.status === "scheduled" && status === "live"
+        ? "Match kickoff!"
+        : null;
+        
+  if (status === "final") {
+    const hash = await finalizeMatch(matchId, scoreHome, scoreAway);
+    await settleAllForMatch(matchId, scoreHome, scoreAway, hash || "real-hash", clients);
+    broadcast(clients, { 
+      type: "match_settled", 
+      data: { 
+        matchId, 
+        hash, 
+        snapshot: {
+          match_id: matchId,
+          home_team: match.home_team,
+          away_team: match.away_team,
+          status: "final",
+          score_home: scoreHome,
+          score_away: scoreAway,
+          minute,
+          last_event: "Match finalized"
+        }
+      } 
+    });
+  } else {
+    await updateMatchScore(matchId, scoreHome, scoreAway, status, lastEvent);
+    
+    broadcast(clients, {
+      type: "match_update",
+      data: {
+        match_id: matchId,
+        status,
+        score_home: scoreHome,
+        score_away: scoreAway,
+        odds_home: Number(match.odds_home),
+        odds_away: Number(match.odds_away),
+        odds_draw: Number(match.odds_draw),
+        minute,
+        last_event: lastEvent || undefined,
+      }
+    });
+    
+    if (homeGoal) {
+      await onGoal(matchId, "home", minute);
+    } else if (awayGoal) {
+      await onGoal(matchId, "away", minute);
+    }
+  }
+}
+
+async function handleLiveOddsUpdate(data: any, clients: Set<WebSocket>) {
+  const match = await getMatchByFixtureId(data.FixtureId);
+  if (!match) return;
+  
+  const matchId = match.match_id;
+  const simState = simulations.get(matchId);
+  
+  if (simState && simState.active) {
+    return;
+  }
+  
+  if (!data.Odds || data.Odds.length < 3) return;
+  
+  const oddsHome = Number(data.Odds[0].SP || data.Odds[0].StablePrice || match.odds_home);
+  const oddsAway = Number(data.Odds[2].SP || data.Odds[2].StablePrice || match.odds_away);
+  const oddsDraw = Number(data.Odds[1].SP || data.Odds[1].StablePrice || match.odds_draw);
+  
+  await updateMatchOdds(matchId, oddsHome, oddsAway, oddsDraw);
+  
+  const probHome = decimalToImpliedProb(oddsHome);
+  const probAway = decimalToImpliedProb(oddsAway);
+  
+  broadcast(clients, {
+    type: "match_update",
+    data: {
+      match_id: matchId,
+      status: match.status,
+      score_home: match.score_home,
+      score_away: match.score_away,
+      odds_home: oddsHome,
+      odds_away: oddsAway,
+      odds_draw: oddsDraw,
+      implied_prob_home: Math.round(probHome * 10) / 10,
+      implied_prob_away: Math.round(probAway * 10) / 10,
+      minute: simState ? simState.minute : 0,
+    }
+  });
 }

@@ -36,23 +36,32 @@ export function useTxLineSocket(walletAddress?: string) {
           }
           break;
         case "agent_event":
-          if (msg.data.position) {
-            addPosition(msg.data.position);
-          }
-          if (msg.data.message) {
-            addAgentLog({
-              id: crypto.randomUUID(),
-              strategy_id: msg.data.strategy_id,
-              match_id: currentMatch.match_id,
-              event_type: msg.data.event_type || "info",
-              message: msg.data.message,
-              txline_snapshot: {},
-              created_at: new Date().toISOString(),
-            });
+          const activeStrategy = useTerminalStore.getState().strategy;
+          if (activeStrategy && msg.data.strategy_id === activeStrategy.id) {
+            if (msg.data.position) {
+              addPosition(msg.data.position);
+            }
+            if (msg.data.message) {
+              addAgentLog({
+                id: crypto.randomUUID(),
+                strategy_id: msg.data.strategy_id,
+                match_id: currentMatch.match_id,
+                event_type: msg.data.event_type || "info",
+                message: msg.data.message,
+                txline_snapshot: {},
+                created_at: new Date().toISOString(),
+              });
+            }
           }
           break;
         case "position_settled":
           api.getSettlements(currentMatch.match_id).then(setSettlements).catch(() => {});
+          const strategy = useTerminalStore.getState().strategy;
+          if (strategy) {
+            api.getPositions(strategy.id).then((p) => {
+              useTerminalStore.getState().setPositions(p);
+            }).catch(console.error);
+          }
           if (walletAddress) {
             api.getWallet(walletAddress).then((w) => {
               useTerminalStore.getState().setWalletBalance(w.balance);

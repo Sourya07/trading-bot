@@ -571,7 +571,7 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
           {/* Positions Table */}
           <motion.div custom={4} variants={panelVariants} initial="hidden" animate="show">
             <Card className="p-4 bg-[#0c1a24] border-slate-800">
-              <PositionsTable />
+              <PositionsTable wallet={wallet} />
             </Card>
           </motion.div>
         </div>

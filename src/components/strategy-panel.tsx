@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import type { StrategyData } from "@/lib/types";
 import type { usePhantomWallet } from "@/lib/use-phantom-wallet";
 import { Play, Square, Zap, Shield, Wallet } from "lucide-react";
+import { createStrategyOnChain, createPositionOnChain } from "@/lib/solanaClient";
 
 type Props = {
   strategy?: StrategyData;
@@ -49,24 +50,56 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
     if (!wallet.address) return;
     setCreating(true);
     try {
-      const newStrategy = await api.createStrategy(wallet.address, matchId, template, {
-        primary_side: primarySide,
-        primary_stake: primaryStake,
-        hedge_stake: hedgeStake,
-      });
+      console.log("[On-Chain] Preparing strategy parameters...");
+      // Append a timestamp to matchId to ensure the PDA seed is unique on recreate
+      const uniqueMatchId = `${matchId}-${Date.now()}`;
+      
+      const configStr = JSON.stringify({ primarySide, primaryStake, hedgeStake });
+      const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(configStr));
+      const ruleConfigHash = Array.from(new Uint8Array(hashBuffer));
+      
+      console.log("[On-Chain] Creating strategy account on Solana...");
+      const stratResult = await createStrategyOnChain(wallet, uniqueMatchId, "winner", ruleConfigHash);
+      console.log(`[On-Chain] Strategy created. Signature: ${stratResult.tx}`);
+
+      const newStrategy = await api.createStrategy(
+        wallet.address,
+        matchId,
+        template,
+        {
+          primary_side: primarySide,
+          primary_stake: primaryStake,
+          hedge_stake: hedgeStake,
+          strategy_pda: stratResult.strategyPda,
+        },
+        stratResult.tx
+      );
       setStrategy(newStrategy);
 
       const match = useTerminalStore.getState().currentMatch;
+      const entryOdds = primarySide === "home" ? Number(match?.odds_home) : Number(match?.odds_away);
+      
+      console.log("[On-Chain] Creating position account on Solana...");
+      const posResult = await createPositionOnChain(
+        wallet,
+        stratResult.strategyPda,
+        primarySide as "home" | "away" | "draw",
+        entryOdds,
+        primaryStake
+      );
+      console.log(`[On-Chain] Position created. Signature: ${posResult.tx}`);
+
       const sideLabel = primarySide === "home" ? match?.home_team : match?.away_team;
       await api.createPosition({
         strategy_id: newStrategy.id,
         match_id: matchId,
         wallet: wallet.address,
         side: primarySide,
-        entry_odds: primarySide === "home" ? Number(match?.odds_home) : Number(match?.odds_away),
+        entry_odds: entryOdds,
         stake_credits: primaryStake,
         position_type: "primary",
-        trigger_reason: `Initial primary position on ${sideLabel} at ${primarySide === "home" ? Number(match?.odds_home).toFixed(2) : Number(match?.odds_away).toFixed(2)} odds`,
+        trigger_reason: `Initial primary position on ${sideLabel} at ${entryOdds.toFixed(2)} odds`,
+        anchor_position_signature: posResult.tx,
       }).then((pos) => {
         if (pos) addPosition(pos);
       });
@@ -76,7 +109,7 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
         strategy_id: newStrategy.id,
         match_id: matchId,
         event_type: "info",
-        message: `Strategy created: ${template.replace(/_/g, " ")}. Primary position of ${primaryStake} credits placed on ${sideLabel}. Agent will monitor for goal events and hedge automatically if the opponent scores.`,
+        message: `Strategy created on-chain: ${template.replace(/_/g, " ")}. Primary position of ${primaryStake} credits placed on ${sideLabel}. Signature: ${stratResult.tx.substring(0, 12)}...`,
         txline_snapshot: {},
         created_at: new Date().toISOString(),
       });
@@ -87,8 +120,13 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
       }).catch(console.error);
 
       onCreated?.();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("[On-Chain] Error creating strategy/position:", e);
+      const logs = e.logs || e.transactionLogs || [];
+      if (logs.length > 0) {
+        console.log("[On-Chain] Transaction Logs:", logs);
+      }
+      alert(`On-chain transaction failed: ${e.message || e}${logs.length > 0 ? `\n\nLogs:\n${logs.slice(0, 8).join("\n")}` : ""}`);
     } finally {
       setCreating(false);
     }

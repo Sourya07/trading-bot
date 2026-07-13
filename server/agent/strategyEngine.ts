@@ -14,14 +14,15 @@ export async function createStrategy(
   wallet: string,
   matchId: string,
   template: string,
-  ruleConfig: Record<string, unknown>
+  ruleConfig: Record<string, unknown>,
+  anchorStrategySignature: string | null = null
 ): Promise<Strategy | null> {
   try {
     return await queryOne<Strategy>(
-      `INSERT INTO strategies (wallet, match_id, template, rule_config, agent_active)
-       VALUES ($1, $2, $3, $4, false)
+      `INSERT INTO strategies (wallet, match_id, template, rule_config, agent_active, anchor_strategy_signature)
+       VALUES ($1, $2, $3, $4, false, $5)
        RETURNING *`,
-      [wallet, matchId, template, JSON.stringify(ruleConfig)]
+      [wallet, matchId, template, JSON.stringify(ruleConfig), anchorStrategySignature]
     );
   } catch (err) {
     console.error("Error creating strategy:", err);
