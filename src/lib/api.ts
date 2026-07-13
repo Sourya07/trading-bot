@@ -30,6 +30,12 @@ export const api = {
   fastForward: (matchId: string) =>
     fetchJson<{ ok: boolean }>(`${API_BASE}/fixtures/${matchId}/fast-forward`, { method: "POST" }),
 
+  triggerGoal: (matchId: string, team: "home" | "away") =>
+    fetchJson<{ ok: boolean }>(`${API_BASE}/fixtures/${matchId}/trigger-goal`, {
+      method: "POST",
+      body: JSON.stringify({ team }),
+    }),
+
   createStrategy: (wallet: string, matchId: string, template: string, ruleConfig: Record<string, unknown>, anchorStrategySignature?: string | null) =>
     fetchJson<StrategyData>(`${API_BASE}/strategies`, {
       method: "POST",

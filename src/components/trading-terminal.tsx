@@ -616,10 +616,30 @@ export function TradingTerminal({ matchId, onBack, wallet }: Props) {
             variant="outline"
             onClick={() => api.fastForward(matchId).catch(console.error)}
             disabled={currentMatch.status === "final"}
-            className="gap-1.5 border-border/30 hover:border-agent/30 hover:text-agent hover:bg-agent/5"
+            className="gap-1.5 border-border/30 hover:border-agent/30 hover:text-agent hover:bg-agent/5 cursor-pointer"
           >
             <FastForward className="h-3.5 w-3.5" />
             Fast Forward 85'
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => api.triggerGoal(matchId, "home").catch(console.error)}
+            disabled={currentMatch.status !== "live"}
+            className="gap-1.5 border-border/30 hover:border-profit/30 hover:text-profit hover:bg-profit/5 cursor-pointer"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Goal: {currentMatch.home_team.split(" ")[0]}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => api.triggerGoal(matchId, "away").catch(console.error)}
+            disabled={currentMatch.status !== "live"}
+            className="gap-1.5 border-border/30 hover:border-profit/30 hover:text-profit hover:bg-profit/5 cursor-pointer"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Goal: {currentMatch.away_team.split(" ")[0]}
           </Button>
         </motion.div>
       )}

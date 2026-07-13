@@ -19,6 +19,8 @@ type SimState = {
 };
 
 const simulations = new Map<string, SimState>();
+let activeClients: Set<WebSocket> | null = null;
+let activeOnGoal: ((matchId: string, scoringTeam: "home" | "away", minute: number) => Promise<void>) | null = null;
 
 function broadcast(clients: Set<WebSocket>, msg: unknown) {
   const data = JSON.stringify(msg);
@@ -206,6 +208,8 @@ export function startTxLineWorker(
   clients: Set<WebSocket>,
   onGoal: (matchId: string, scoringTeam: "home" | "away", minute: number) => Promise<void>
 ) {
+  activeClients = clients;
+  activeOnGoal = onGoal;
   // Start simulation loop (poller runs every 3s)
   setInterval(async () => {
     const matches = await getMatches();
@@ -427,4 +431,62 @@ async function handleLiveOddsUpdate(data: any, clients: Set<WebSocket>) {
       minute: simState ? simState.minute : 0,
     }
   });
+}
+
+export async function triggerMockGoal(matchId: string, team: "home" | "away"): Promise<void> {
+  await ensureSim(matchId);
+  const state = simulations.get(matchId);
+  if (!state) {
+    throw new Error("Match simulation not found");
+  }
+  
+  if (!state.active) {
+    state.active = true;
+    await query(
+      `UPDATE matches SET status = 'live' WHERE match_id = $1`,
+      [matchId]
+    );
+  }
+
+  const match = await getMatch(matchId);
+  if (!match) return;
+
+  if (team === "home") {
+    state.homeScore += 1;
+    state.lastEvent = `Goal! ${match.home_team} scored in minute ${state.minute}`;
+  } else {
+    state.awayScore += 1;
+    state.lastEvent = `Goal! ${match.away_team} scored in minute ${state.minute}`;
+  }
+
+  const nextOdds = calculateOddsFromScore(state.homeScore, state.awayScore, state.minute);
+  await updateMatchOdds(matchId, nextOdds.home, nextOdds.away, nextOdds.draw);
+  await updateMatchScore(matchId, state.homeScore, state.awayScore, "live", state.lastEvent);
+
+  if (activeOnGoal) {
+    await activeOnGoal(matchId, team, state.minute);
+  }
+
+  const probHome = decimalToImpliedProb(nextOdds.home);
+  const probAway = decimalToImpliedProb(nextOdds.away);
+
+  if (activeClients) {
+    broadcast(activeClients, {
+      type: "match_update",
+      data: {
+        match_id: matchId,
+        status: "live",
+        score_home: state.homeScore,
+        score_away: state.awayScore,
+        odds_home: nextOdds.home,
+        odds_away: nextOdds.away,
+        odds_draw: nextOdds.draw,
+        implied_prob_home: Math.round(probHome * 10) / 10,
+        implied_prob_away: Math.round(probAway * 10) / 10,
+        minute: state.minute,
+        last_event: state.lastEvent,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
 }

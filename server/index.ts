@@ -15,7 +15,7 @@ import {
   handleGoalEvent,
   settleAllForMatch,
 } from "./agent/strategyEngine";
-import { startTxLineWorker, startMatchSimulation, fastForwardMatch, resetWorkerSimulations } from "./workers/txlineWorker";
+import { startTxLineWorker, startMatchSimulation, fastForwardMatch, resetWorkerSimulations, triggerMockGoal } from "./workers/txlineWorker";
 import { hashSnapshot } from "./txline";
 import { runMigrations } from "./migrate";
 import { getTxHedgeProgramStatus } from "./solana";
@@ -85,6 +85,21 @@ app.post("/api/fixtures/:matchId/start-simulation", async (req, res) => {
 app.post("/api/fixtures/:matchId/fast-forward", async (req, res) => {
   await fastForwardMatch(req.params.matchId);
   res.json({ ok: true });
+});
+
+app.post("/api/fixtures/:matchId/trigger-goal", async (req, res) => {
+  try {
+    const { team } = req.body;
+    if (team !== "home" && team !== "away") {
+      res.status(400).json({ error: "Invalid team. Must be 'home' or 'away'" });
+      return;
+    }
+    await triggerMockGoal(req.params.matchId, team);
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
 });
 
 app.post("/api/reset", async (req, res) => {
