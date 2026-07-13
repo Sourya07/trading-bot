@@ -14,33 +14,7 @@ import { StrategyPanel } from "./strategy-panel";
 import { ProofPanel } from "./proof-panel";
 import { AnimatedNumber } from "./animated-number";
 import { ArrowLeft, Zap, Activity, ShieldCheck, Wallet, BarChart3, Bot, Play, FastForward, Search, Calendar, Trophy, ChevronDown, Tv, Globe } from "lucide-react";
-
-function getFlag(teamName: string): string {
-  const normalized = teamName.toLowerCase().trim();
-  if (normalized.includes("brazil")) return "🇧🇷";
-  if (normalized.includes("germany")) return "🇩🇪";
-  if (normalized.includes("argentina")) return "🇦🇷";
-  if (normalized.includes("france")) return "🇫🇷";
-  if (normalized.includes("spain")) return "🇪🇸";
-  if (normalized.includes("england")) return "🏴󠁧󠁢󠁥󠁮󠁧󠁿";
-  if (normalized.includes("portugal")) return "🇵🇹";
-  if (normalized.includes("netherlands")) return "🇳🇱";
-  if (normalized.includes("italy")) return "🇮🇹";
-  if (normalized.includes("belgium")) return "🇧🇪";
-  if (normalized.includes("mexico")) return "🇲🇽";
-  if (normalized.includes("usa") || normalized.includes("united states")) return "🇺🇸";
-  if (normalized.includes("switzerland")) return "🇨🇭";
-  if (normalized.includes("algeria")) return "🇩🇿";
-  if (normalized.includes("australia")) return "🇦🇺";
-  if (normalized.includes("egypt")) return "🇪🇬";
-  if (normalized.includes("cape verde")) return "🇨🇻";
-  if (normalized.includes("colombia")) return "🇨🇴";
-  if (normalized.includes("ghana")) return "🇬🇭";
-  if (normalized.includes("canada")) return "🇨🇦";
-  if (normalized.includes("morocco")) return "🇲🇦";
-  if (normalized.includes("paraguay")) return "🇵🇾";
-  return "🏳️";
-}
+import { getFlag } from "@/lib/flags";
 
 type Props = {
   matchId: string;
