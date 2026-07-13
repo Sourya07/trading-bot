@@ -29,6 +29,16 @@ function getFlag(teamName: string): string {
   if (normalized.includes("belgium")) return "🇧🇪";
   if (normalized.includes("mexico")) return "🇲🇽";
   if (normalized.includes("usa") || normalized.includes("united states")) return "🇺🇸";
+  if (normalized.includes("switzerland")) return "🇨🇭";
+  if (normalized.includes("algeria")) return "🇩🇿";
+  if (normalized.includes("australia")) return "🇦🇺";
+  if (normalized.includes("egypt")) return "🇪🇬";
+  if (normalized.includes("cape verde")) return "🇨🇻";
+  if (normalized.includes("colombia")) return "🇨🇴";
+  if (normalized.includes("ghana")) return "🇬🇭";
+  if (normalized.includes("canada")) return "🇨🇦";
+  if (normalized.includes("morocco")) return "🇲🇦";
+  if (normalized.includes("paraguay")) return "🇵🇾";
   return "🏳️";
 }
 
