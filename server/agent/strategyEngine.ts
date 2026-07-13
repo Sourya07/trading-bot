@@ -350,7 +350,7 @@ export async function handleGoalEvent(
   const snapshotHash = hashSnapshot(snapshot);
 
   for (const strategy of strategies) {
-    if (strategy.template === "goal_shift_hedge") {
+    if (strategy.template === "goal_shift_hedge" || strategy.template === "momentum") {
       const ruleConfig = strategy.rule_config as {
         primary_side?: string;
         primary_stake?: number;
@@ -367,11 +367,15 @@ export async function handleGoalEvent(
         const hedgeSide = scoringTeam === "home" ? "home" : "away";
         const hedgeOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
 
-        const baseMessage = `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
+        const baseMessage = strategy.template === "momentum"
+          ? `Negative momentum detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Executing loss-cut hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect equity. Stake: ${hedgeStake} credits.`
+          : `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
 
         const message = await generateLLMReasoning(
           strategy.template,
-          `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored a goal. Triggering hedge offset on ${hedgeSide} with stake ${hedgeStake}.`,
+          strategy.template === "momentum"
+            ? `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Momentum shifted. Placing protective hedge on ${hedgeSide}.`
+            : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Conceding goal. Placing hedge on ${hedgeSide}.`,
           snapshot,
           baseMessage
         );
@@ -403,11 +407,79 @@ export async function handleGoalEvent(
           });
         }
       } else {
-        const baseMessage = `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. This aligns with your primary position on ${primarySide === "home" ? match.home_team : match.away_team}. No hedge needed — momentum is favorable.`;
+        const baseMessage = strategy.template === "momentum"
+          ? `Positive momentum detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Supported side holds lead. No risk offset required.`
+          : `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. This aligns with your primary position on ${primarySide === "home" ? match.home_team : match.away_team}. No hedge needed — momentum is favorable.`;
 
         const message = await generateLLMReasoning(
           strategy.template,
-          `Supported team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored a goal. Momentum is favorable. No hedge action required.`,
+          `Supported team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Momentum remains favorable. No action required.`,
+          snapshot,
+          baseMessage
+        );
+
+        await logAgentEvent(strategy.id, matchId, "info", message, snapshot);
+        broadcast(clients, {
+          type: "agent_event",
+          data: { strategy_id: strategy.id, event_type: "info", message },
+        });
+      }
+    } else if (strategy.template === "mean_reversion") {
+      const ruleConfig = strategy.rule_config as {
+        primary_side?: string;
+        primary_stake?: number;
+        hedge_stake?: number;
+      };
+      const primarySide = ruleConfig.primary_side || "home";
+      const reversionStake = ruleConfig.hedge_stake || 50;
+
+      const opponentScored =
+        (primarySide === "home" && scoringTeam === "away") ||
+        (primarySide === "away" && scoringTeam === "home");
+
+      if (opponentScored) {
+        const primarySideOdds = primarySide === "home" ? Number(match.odds_home) : Number(match.odds_away);
+
+        const baseMessage = `Odds deviation detected: Opponent team scored. Supported side (${primarySide === "home" ? match.home_team : match.away_team}) odds spiked to ${primarySideOdds.toFixed(2)}. Entering secondary reversion position of ${reversionStake} credits at premium odds.`;
+
+        const message = await generateLLMReasoning(
+          strategy.template,
+          `Opponent team scored. Supported team's odds spiked to ${primarySideOdds.toFixed(2)}. Entering reversion position.`,
+          snapshot,
+          baseMessage
+        );
+
+        await logAgentEvent(strategy.id, matchId, "trigger", message, snapshot);
+
+        const position = await createPosition(
+          strategy.id,
+          matchId,
+          strategy.wallet,
+          primarySide,
+          primarySideOdds,
+          reversionStake,
+          "hedge",
+          message,
+          snapshotHash,
+          null
+        );
+
+        if (position) {
+          broadcast(clients, {
+            type: "agent_event",
+            data: {
+              strategy_id: strategy.id,
+              event_type: "trigger",
+              message,
+              position,
+            },
+          });
+        }
+      } else {
+        const baseMessage = `Supported team scored. Odds compressed. No deviation present for mean reversion entry.`;
+        const message = await generateLLMReasoning(
+          strategy.template,
+          `Supported team scored. Odds compressed. No reversion trigger.`,
           snapshot,
           baseMessage
         );
