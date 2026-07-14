@@ -33,7 +33,7 @@ export function HomeHero({ onStartHedging, wallet, matchesCount }: Props) {
           transition={{ type: "spring", stiffness: 100, damping: 18 }}
         >
           <Badge variant="outline" className="hero-kicker">
-            Solana x TxLINE demo terminal
+            Solana x TxLINE devnet terminal
           </Badge>
           <h2>
             Designed to
