@@ -26,47 +26,58 @@ function getOutcomePnl(positions: Array<Pick<Position, "side" | "entry_odds" | "
 }
 
 function getWorstCase(pnl: PortfolioPnl): number {
-  // Hackathon Demo Fix: We ignore the 'draw' outcome here. 
-  // If we include the draw, hedging the opposing team mathematically always makes the worst-case worse in a 1x2 market, preventing the bot from trading.
-  return Math.min(pnl.home, pnl.away);
+  return Math.min(pnl.home, pnl.away, pnl.draw);
 }
 
-function getBestHedgeStake(
+function getBestMultiLegHedge(
   openPositions: Position[],
-  hedgeSide: OutcomeSide,
-  hedgeOdds: number,
+  opponentSide: OutcomeSide,
+  opponentOdds: number,
+  drawOdds: number,
   maxStake: number
-): { stake: number; before: PortfolioPnl; after: PortfolioPnl; improvement: number } {
+): { opponentStake: number; drawStake: number; before: PortfolioPnl; after: PortfolioPnl; improvement: number } {
   const before = getOutcomePnl(openPositions);
   const beforeWorst = getWorstCase(before);
   const roundedMax = Math.max(0, Math.floor(maxStake));
-  let bestStake = 0;
+  
+  let bestOpponentStake = 0;
+  let bestDrawStake = 0;
   let bestAfter = before;
   let bestWorst = beforeWorst;
   let bestUpside = Math.max(before.home, before.away, before.draw);
 
-  for (let stake = 1; stake <= roundedMax; stake += 1) {
-    const after = getOutcomePnl([
-      ...openPositions,
-      {
-        side: hedgeSide,
-        entry_odds: hedgeOdds,
-        stake_credits: stake,
-      } as Position,
-    ]);
-    const worst = getWorstCase(after);
-    const upside = Math.max(after.home, after.away, after.draw);
+  // Dynamic step size for performance optimization
+  const step = roundedMax > 200 ? 5 : (roundedMax > 50 ? 2 : 1);
 
-    if (worst > bestWorst || (worst === bestWorst && upside > bestUpside)) {
-      bestStake = stake;
-      bestAfter = after;
-      bestWorst = worst;
-      bestUpside = upside;
+  for (let oppStake = 0; oppStake <= roundedMax; oppStake += step) {
+    for (let drawStake = 0; drawStake <= roundedMax - oppStake; drawStake += step) {
+      if (oppStake === 0 && drawStake === 0) continue;
+
+      const newPositions = [...openPositions];
+      if (oppStake > 0) {
+        newPositions.push({ side: opponentSide, entry_odds: opponentOdds, stake_credits: oppStake } as Position);
+      }
+      if (drawStake > 0) {
+        newPositions.push({ side: "draw", entry_odds: drawOdds, stake_credits: drawStake } as Position);
+      }
+
+      const after = getOutcomePnl(newPositions);
+      const worst = getWorstCase(after);
+      const upside = Math.max(after.home, after.away, after.draw);
+
+      if (worst > bestWorst || (worst === bestWorst && upside > bestUpside)) {
+        bestOpponentStake = oppStake;
+        bestDrawStake = drawStake;
+        bestAfter = after;
+        bestWorst = worst;
+        bestUpside = upside;
+      }
     }
   }
 
   return {
-    stake: bestStake,
+    opponentStake: bestOpponentStake,
+    drawStake: bestDrawStake,
     before,
     after: bestAfter,
     improvement: bestWorst - beforeWorst,
@@ -481,32 +492,25 @@ export async function handleGoalEvent(
             data: { strategy_id: strategy.id, event_type: "info", message, txline_snapshot: snapshot },
           });
         } else {
-          // Draw Defense: If the match becomes tied late in the game (>= 80 mins), hedge the Draw instead.
+          // Draw Defense check
           const isTied = match.score_home === match.score_away;
           const drawDefenseActive = isTied && matchMinute >= 80;
-          
-          let hedgeSide: OutcomeSide = scoringTeam === "home" ? "home" : "away";
-          let hedgeOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
-          let impliedProb = hedgeSide === "home" ? Number(match.implied_prob_home) : Number(match.implied_prob_away);
 
-          if (drawDefenseActive) {
-            hedgeSide = "draw";
-            hedgeOdds = Number(match.odds_draw);
-            impliedProb = Number(match.implied_prob_draw) || decimalToImpliedProb(hedgeOdds);
-          }
-          
-          // Kelly Criterion Integration for dynamic stake sizing
-          const trueProb = (impliedProb / 100) * (1 + timeDecay * 0.1); // add a slight time-decay premium to our model's true prob
-          const edge = (trueProb * hedgeOdds) - 1;
+          let opponentSide: OutcomeSide = scoringTeam === "home" ? "home" : "away";
+          let opponentOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
+          let drawOdds = Number(match.odds_draw);
+          let impliedProb = opponentSide === "home" ? Number(match.implied_prob_home) : Number(match.implied_prob_away);
+
+          // Kelly Criterion Integration for dynamic max limit logic
+          const trueProb = (impliedProb / 100) * (1 + timeDecay * 0.1); 
+          const edge = (trueProb * opponentOdds) - 1;
           
           let optimalStake = maxHedgeCap;
-          if (edge > 0 && hedgeOdds > 1) {
-            const kellyFraction = edge / (hedgeOdds - 1);
-            const calculatedKellyStake = (ruleConfig.primary_stake || 100) * kellyFraction * 2; // half-kelly adjustment
-            // Bound by user's max hedge stake, and a minimum floor of 10
+          if (edge > 0 && opponentOdds > 1) {
+            const kellyFraction = edge / (opponentOdds - 1);
+            const calculatedKellyStake = (ruleConfig.primary_stake || 100) * kellyFraction * 2; 
             optimalStake = Math.min(Math.max(10, calculatedKellyStake), maxHedgeCap);
           } else {
-            // Defensive loss-cut when mathematical edge is negative: scale down the stake
             optimalStake = Math.max(10, maxHedgeCap * 0.5); 
           }
           optimalStake = Number(optimalStake.toFixed(2));
@@ -518,13 +522,19 @@ export async function handleGoalEvent(
             .reduce((total, position) => total + Number(position.stake_credits || 0), 0);
           const remainingHedgeCap = Math.max(0, maxHedgeCap - existingHedgeStake);
           const exposureMaxStake = Math.min(optimalStake, remainingHedgeCap);
-          const exposureDecision = getBestHedgeStake(
+          
+          const exposureDecision = getBestMultiLegHedge(
             openStrategyPositions,
-            hedgeSide,
-            hedgeOdds,
+            opponentSide,
+            opponentOdds,
+            drawOdds,
             exposureMaxStake
           );
-          const finalStake = Number(exposureDecision.stake.toFixed(2));
+          
+          const finalOpponentStake = Number(exposureDecision.opponentStake.toFixed(2));
+          const finalDrawStake = Number(exposureDecision.drawStake.toFixed(2));
+          const totalFinalStake = finalOpponentStake + finalDrawStake;
+
           const confidence = getConfidenceScore({
             matchMinute,
             drawDefenseActive,
@@ -534,13 +544,13 @@ export async function handleGoalEvent(
             goalMargin,
           });
 
-          if (finalStake < 1 || exposureDecision.improvement < 1) {
-            const skipMessage = `${drawDefenseActive ? "Draw Defense evaluated" : "Opponent goal evaluated"} at ${matchMinute}'. Hedge skipped: exposure already inside cap. Worst-case ${getWorstCase(exposureDecision.before).toFixed(1)} credits. Confidence ${confidence}%.`;
+          if (totalFinalStake < 1 || exposureDecision.improvement < 1) {
+            const skipMessage = `Opponent goal evaluated at ${matchMinute}'. Multi-leg hedge skipped: exposure already inside cap or unhedgeable. Worst-case ${getWorstCase(exposureDecision.before).toFixed(1)} credits. Confidence ${confidence}%.`;
             await logAgentEvent(strategy.id, matchId, "info", skipMessage, {
               ...snapshot,
               portfolio_pnl: exposureDecision.before,
               confidence,
-              hedge_side_evaluated: hedgeSide,
+              hedge_side_evaluated: opponentSide,
               remaining_hedge_cap: remainingHedgeCap,
             });
             broadcast(clients, {
@@ -558,18 +568,16 @@ export async function handleGoalEvent(
             });
             continue;
           }
-
-          const drawDefenseStr = drawDefenseActive ? `Late equalizer detected at minute ${matchMinute}. Activating Draw Defense.` : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored.`;
           
           const baseMessage = strategy.template === "momentum"
-            ? `${drawDefenseStr} Executing exposure-aware hedge on ${hedgeSide} at ${hedgeOdds.toFixed(2)}. Stake ${finalStake} credits, worst-case improves ${exposureDecision.improvement.toFixed(1)} credits, confidence ${confidence}%.`
-            : `${drawDefenseStr} Opening exposure-aware hedge on ${hedgeSide} at ${hedgeOdds.toFixed(2)}. Stake ${finalStake} credits, worst-case improves ${exposureDecision.improvement.toFixed(1)} credits, confidence ${confidence}%.`;
+            ? `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Executing exposure-aware MULTI-LEG hedge: ${finalOpponentStake} credits on ${opponentSide} @ ${opponentOdds.toFixed(2)}, and ${finalDrawStake} credits on Draw @ ${drawOdds.toFixed(2)}. Worst-case improves by ${exposureDecision.improvement.toFixed(1)} credits, confidence ${confidence}%.`
+            : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Opening exposure-aware MULTI-LEG hedge: ${finalOpponentStake} credits on ${opponentSide} @ ${opponentOdds.toFixed(2)}, and ${finalDrawStake} credits on Draw @ ${drawOdds.toFixed(2)}. Worst-case improves by ${exposureDecision.improvement.toFixed(1)} credits, confidence ${confidence}%.`;
 
           const message = await generateLLMReasoning(
             strategy.template,
             strategy.template === "momentum"
-              ? `${drawDefenseStr} Momentum shifted. Placing exposure-weighted hedge of ${finalStake} on ${hedgeSide}. Confidence ${confidence}%.`
-              : `${drawDefenseStr} Conceding goal. Placing exposure-weighted hedge of ${finalStake} on ${hedgeSide}. Confidence ${confidence}%.`,
+              ? `Momentum shifted. Placing multi-leg hedge: ${finalOpponentStake} on Opponent, ${finalDrawStake} on Draw to lock in downside protection. Confidence ${confidence}%.`
+              : `Conceding goal. Placing multi-leg hedge: ${finalOpponentStake} on Opponent, ${finalDrawStake} on Draw to lock in downside protection. Confidence ${confidence}%.`,
             {
               ...snapshot,
               portfolio_pnl_before: exposureDecision.before,
@@ -591,30 +599,48 @@ export async function handleGoalEvent(
 
           await logAgentEvent(strategy.id, matchId, "trigger", message, enrichedSnapshot);
 
-          const position = await createPosition(
-            strategy.id,
-            matchId,
-            strategy.wallet,
-            hedgeSide,
-            hedgeOdds,
-            finalStake,
-            "hedge",
-            message,
-            snapshotHash,
-            null
-          );
+          // Execute Opponent Leg
+          if (finalOpponentStake > 0) {
+            const oppPosition = await createPosition(
+              strategy.id,
+              matchId,
+              strategy.wallet,
+              opponentSide,
+              opponentOdds,
+              finalOpponentStake,
+              "hedge",
+              `Multi-leg hedge (Leg 1/2): Opponent`,
+              snapshotHash,
+              null
+            );
+            if (oppPosition) {
+              broadcast(clients, {
+                type: "agent_event",
+                data: { strategy_id: strategy.id, event_type: "trigger", message, position: oppPosition, txline_snapshot: enrichedSnapshot },
+              });
+            }
+          }
 
-          if (position) {
-            broadcast(clients, {
-              type: "agent_event",
-              data: {
-                strategy_id: strategy.id,
-                event_type: "trigger",
-                message,
-                position,
-                txline_snapshot: enrichedSnapshot,
-              },
-            });
+          // Execute Draw Leg
+          if (finalDrawStake > 0) {
+            const drawPosition = await createPosition(
+              strategy.id,
+              matchId,
+              strategy.wallet,
+              "draw",
+              drawOdds,
+              finalDrawStake,
+              "hedge",
+              `Multi-leg hedge (Leg 2/2): Draw`,
+              snapshotHash,
+              null
+            );
+            if (drawPosition) {
+              broadcast(clients, {
+                type: "agent_event",
+                data: { strategy_id: strategy.id, event_type: "trigger", message, position: drawPosition, txline_snapshot: enrichedSnapshot },
+              });
+            }
           }
         }
       } else {

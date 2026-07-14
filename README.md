@@ -16,6 +16,11 @@ Designed for the **TxLINE Data Layer Track** on Superteam Earn.
 *   **Institutional Quant Mathematics**:
     - **Dynamic Stake Sizing (Kelly Criterion)**: The agent dynamically calculates its mathematical edge against implied market probabilities to execute optimal fractional Half-Kelly stakes instead of flat bets.
     - **Time-Decay (Theta) Poisson Model**: Evaluates the match clock to safely bypass hedges if a lead is statistically secure late in the match, avoiding mathematically inefficient risk offsets.
+    - **V2 Multi-Leg Arbitrage Engine**: Instead of blindly hedging a single outcome, the agent evaluates the absolute worst-case scenario across all 3 outcomes (Home, Away, Draw). It dynamically splits your hedge stake across both the Opponent and the Draw simultaneously to mathematically lock down downside risk in 1X2 markets.
+    - **Late-Match Draw Defense**: Actively monitors the match clock to detect late equalizers (>= 80 mins), explicitly deploying protective stakes on the Draw market to prevent devastating late-game variance.
+*   **Advanced UI Risk Controls**:
+    - **Risk Appetite Slider**: Users set their maximum hedge limit via a dynamic slider (Aggressive, Balanced, Conservative) with strict cap enforcement, replacing manual guessing.
+    - **Minimum Odds Validation**: The terminal actively warns users if their primary entry odds drop below 2.00, ensuring the agent has enough "pricing runway" to execute profitable hedges.
 *   **Immutable Execution Proofs**: Every LLM-reasoned trade generates a verifiable JSON state snapshot of the live TxLINE odds and clock. This payload is hashed and visualized in a cyberpunk-styled **[Verify Proof]** UI modal, simulating Solana Anchor on-chain transparency for hackathon demonstrations.
 *   **On-Chain Solana Integration**: Strategy registries and position entries are executed directly on the **Solana Devnet** via Phantom. When a match ends, the user signs a transaction on-chain calling the program's `settle_position` instruction to claim their payout.
 *   **Gemini 2.5 Flash Reasoning**: Integrates the **Gemini API** to analyze live scorelines, strategies, and odds in real-time, outputting dynamic quant-style reasoning logs directly to the terminal feed.
