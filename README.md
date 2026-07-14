@@ -13,6 +13,10 @@ Designed for the **TxLINE Data Layer Track** on Superteam Earn.
     1.  **Goal-Shift Hedge**: Automatically places cover positions on the opposing side when a goal is conceded to hedge downside exposure.
     2.  **Momentum Engine**: Detects rapid changes in implied probabilities and enters positions to ride shifts in score momentum.
     3.  **Mean Reversion**: Capitalizes on temporary odds spikes that drift away from the historical base rates.
+*   **Institutional Quant Mathematics**:
+    - **Dynamic Stake Sizing (Kelly Criterion)**: The agent dynamically calculates its mathematical edge against implied market probabilities to execute optimal fractional Half-Kelly stakes instead of flat bets.
+    - **Time-Decay (Theta) Poisson Model**: Evaluates the match clock to safely bypass hedges if a lead is statistically secure late in the match, avoiding mathematically inefficient risk offsets.
+*   **Immutable Execution Proofs**: Every LLM-reasoned trade generates a verifiable JSON state snapshot of the live TxLINE odds and clock. This payload is hashed and visualized in a cyberpunk-styled **[Verify Proof]** UI modal, simulating Solana Anchor on-chain transparency for hackathon demonstrations.
 *   **On-Chain Solana Integration**: Strategy registries and position entries are executed directly on the **Solana Devnet** via Phantom. When a match ends, the user signs a transaction on-chain calling the program's `settle_position` instruction to claim their payout.
 *   **Gemini 2.5 Flash Reasoning**: Integrates the **Gemini API** to analyze live scorelines, strategies, and odds in real-time, outputting dynamic quant-style reasoning logs directly to the terminal feed.
 *   **Neon DB with In-Memory Fallback**: Built on **Neon DB** using raw SQL migrations. If the remote database is unreachable, the server automatically falls back to an in-memory database mode with full live streams and simulations active.
