@@ -7,7 +7,7 @@ import { usePhantomWallet } from "./lib/use-phantom-wallet";
 import { useTerminalStore } from "./lib/store";
 import { api } from "./lib/api";
 import { Button } from "./components/ui/button";
-import { Menu, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 export function App() {
   const shellRef = useRef<HTMLDivElement>(null);
