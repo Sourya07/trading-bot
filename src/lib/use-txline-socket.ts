@@ -24,8 +24,10 @@ export function useTxLineSocket(walletAddress?: string) {
                 recorded_at: new Date().toISOString(),
                 odds_home: msg.data.odds_home || 0,
                 odds_away: msg.data.odds_away || 0,
+                odds_draw: msg.data.odds_draw || 0,
                 implied_prob_home: msg.data.implied_prob_home || 0,
                 implied_prob_away: msg.data.implied_prob_away || 0,
+                implied_prob_draw: msg.data.implied_prob_draw || 0,
               });
             }
           }

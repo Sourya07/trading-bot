@@ -7,6 +7,7 @@ import { BarChart3 } from "lucide-react";
 const chartConfig = {
   probHome: { label: "Home Probability", color: "var(--chart-1)" },
   probAway: { label: "Away Probability", color: "var(--chart-2)" },
+  probDraw: { label: "Draw Probability", color: "var(--chart-3)" },
 };
 
 export function OddsChart() {
@@ -17,6 +18,7 @@ export function OddsChart() {
     index: i,
     probHome: Number(Number(point.implied_prob_home || 0).toFixed(1)),
     probAway: Number(Number(point.implied_prob_away || 0).toFixed(1)),
+    probDraw: Number(Number(point.implied_prob_draw || 0).toFixed(1)),
     time: new Date(point.recorded_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
   }));
 
@@ -46,6 +48,10 @@ export function OddsChart() {
           <linearGradient id="gradAway" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.25} />
             <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="gradDraw" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.18} />
+            <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.01} />
           </linearGradient>
           {/* Glow filter */}
           <filter id="glow">
@@ -79,6 +85,16 @@ export function OddsChart() {
           dot={false}
           activeDot={{ r: 5, fill: "var(--chart-2)", stroke: "var(--background)", strokeWidth: 2, filter: "url(#glow)" }}
           name={currentMatch?.away_team || "Away"}
+          type="monotone"
+        />
+        <Area
+          dataKey="probDraw"
+          stroke="var(--color-probDraw)"
+          strokeWidth={2}
+          fill="url(#gradDraw)"
+          dot={false}
+          activeDot={{ r: 5, fill: "var(--chart-3)", stroke: "var(--background)", strokeWidth: 2, filter: "url(#glow)" }}
+          name="Draw"
           type="monotone"
         />
       </AreaChart>

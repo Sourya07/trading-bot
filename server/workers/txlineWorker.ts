@@ -185,6 +185,7 @@ async function processMatch(
 
   const probHome = decimalToImpliedProb(nextOdds.home);
   const probAway = decimalToImpliedProb(nextOdds.away);
+  const probDraw = decimalToImpliedProb(nextOdds.draw);
 
   broadcast(clients, {
     type: "match_update",
@@ -198,6 +199,7 @@ async function processMatch(
       odds_draw: nextOdds.draw,
       implied_prob_home: Math.round(probHome * 10) / 10,
       implied_prob_away: Math.round(probAway * 10) / 10,
+      implied_prob_draw: Math.round(probDraw * 10) / 10,
       minute: state.minute,
       last_event: state.lastEvent,
     },
@@ -415,6 +417,7 @@ async function handleLiveOddsUpdate(data: any, clients: Set<WebSocket>) {
   
   const probHome = decimalToImpliedProb(oddsHome);
   const probAway = decimalToImpliedProb(oddsAway);
+  const probDraw = decimalToImpliedProb(oddsDraw);
   
   broadcast(clients, {
     type: "match_update",
@@ -428,6 +431,7 @@ async function handleLiveOddsUpdate(data: any, clients: Set<WebSocket>) {
       odds_draw: oddsDraw,
       implied_prob_home: Math.round(probHome * 10) / 10,
       implied_prob_away: Math.round(probAway * 10) / 10,
+      implied_prob_draw: Math.round(probDraw * 10) / 10,
       minute: simState ? simState.minute : 0,
     }
   });
@@ -469,6 +473,7 @@ export async function triggerMockGoal(matchId: string, team: "home" | "away"): P
 
   const probHome = decimalToImpliedProb(nextOdds.home);
   const probAway = decimalToImpliedProb(nextOdds.away);
+  const probDraw = decimalToImpliedProb(nextOdds.draw);
 
   if (activeClients) {
     broadcast(activeClients, {
@@ -483,6 +488,7 @@ export async function triggerMockGoal(matchId: string, team: "home" | "away"): P
         odds_draw: nextOdds.draw,
         implied_prob_home: Math.round(probHome * 10) / 10,
         implied_prob_away: Math.round(probAway * 10) / 10,
+        implied_prob_draw: Math.round(probDraw * 10) / 10,
         minute: state.minute,
         last_event: state.lastEvent,
         timestamp: new Date().toISOString(),

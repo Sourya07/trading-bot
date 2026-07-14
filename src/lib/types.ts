@@ -11,6 +11,7 @@ export type MatchData = {
   odds_draw: number;
   implied_prob_home: number;
   implied_prob_away: number;
+  implied_prob_draw: number;
   txline_data: Record<string, unknown>;
   txline_result_hash: string | null;
   updated_at: string;
@@ -85,8 +86,10 @@ export type OddsHistoryPoint = {
   recorded_at: string;
   odds_home: number;
   odds_away: number;
+  odds_draw: number;
   implied_prob_home: number;
   implied_prob_away: number;
+  implied_prob_draw: number;
 };
 
 export type WsMessage =

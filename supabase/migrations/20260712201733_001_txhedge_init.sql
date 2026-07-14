@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS matches (
   odds_draw numeric DEFAULT 3.0,
   implied_prob_home numeric DEFAULT 50.0,
   implied_prob_away numeric DEFAULT 50.0,
+  implied_prob_draw numeric DEFAULT 33.3,
   txline_data jsonb DEFAULT '{}'::jsonb,
   txline_result_hash text,
   updated_at timestamptz DEFAULT now()
@@ -121,8 +122,10 @@ CREATE TABLE IF NOT EXISTS odds_history (
   match_id text NOT NULL REFERENCES matches(match_id) ON DELETE CASCADE,
   odds_home numeric NOT NULL,
   odds_away numeric NOT NULL,
+  odds_draw numeric NOT NULL DEFAULT 3.0,
   implied_prob_home numeric NOT NULL,
   implied_prob_away numeric NOT NULL,
+  implied_prob_draw numeric NOT NULL DEFAULT 33.3,
   recorded_at timestamptz DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_odds_history_match_id ON odds_history(match_id);

@@ -131,14 +131,20 @@ class InMemoryStore {
       }
     ];
     for (const m of defaultMatches) {
-      this.matches.set(m.match_id, m);
-      this.oddsHistory.set(m.match_id, [
+      const match = {
+        ...m,
+        implied_prob_draw: Math.round((100 / Number(m.odds_draw)) * 10) / 10,
+      };
+      this.matches.set(match.match_id, match);
+      this.oddsHistory.set(match.match_id, [
         {
           recorded_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-          odds_home: m.odds_home,
-          odds_away: m.odds_away,
-          implied_prob_home: m.implied_prob_home,
-          implied_prob_away: m.implied_prob_away
+          odds_home: match.odds_home,
+          odds_away: match.odds_away,
+          odds_draw: match.odds_draw,
+          implied_prob_home: match.implied_prob_home,
+          implied_prob_away: match.implied_prob_away,
+          implied_prob_draw: match.implied_prob_draw
         }
       ]);
     }
@@ -198,9 +204,10 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
     return [] as unknown as T[];
   }
 
-  // 5. UPDATE matches SET odds_home = $1, odds_away = $2, odds_draw = $3, implied_prob_home = $4, implied_prob_away = $5, updated_at = now() WHERE match_id = $6
+  // 5. UPDATE matches SET odds_home = $1, odds_away = $2, odds_draw = $3, implied_prob_home = $4, implied_prob_away = $5, implied_prob_draw = $6, updated_at = now() WHERE match_id = $7
   if (sql.includes("UPDATE matches SET") && sql.includes("odds_home = $1, odds_away = $2")) {
-    const matchId = params?.[5];
+    const hasDrawProb = sql.includes("implied_prob_draw");
+    const matchId = params?.[hasDrawProb ? 6 : 5];
     const match = inMemoryStore.matches.get(matchId);
     if (match) {
       match.odds_home = params?.[0];
@@ -208,6 +215,7 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
       match.odds_draw = params?.[2];
       match.implied_prob_home = params?.[3];
       match.implied_prob_away = params?.[4];
+      match.implied_prob_draw = hasDrawProb ? params?.[5] : Math.round((100 / Number(params?.[2] || 3)) * 10) / 10;
       match.updated_at = new Date().toISOString();
     }
     return [] as unknown as T[];
@@ -404,8 +412,10 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
       recorded_at: new Date().toISOString(),
       odds_home: params?.[1],
       odds_away: params?.[2],
-      implied_prob_home: params?.[3],
-      implied_prob_away: params?.[4]
+      odds_draw: sql.includes("odds_draw") ? params?.[3] : 3,
+      implied_prob_home: sql.includes("odds_draw") ? params?.[4] : params?.[3],
+      implied_prob_away: sql.includes("odds_draw") ? params?.[5] : params?.[4],
+      implied_prob_draw: sql.includes("odds_draw") ? params?.[6] : 33.3
     };
     inMemoryStore.oddsHistory.get(matchId)?.push(newHistory);
     return [] as unknown as T[];
@@ -551,6 +561,7 @@ export type Match = {
   odds_draw: number;
   implied_prob_home: number;
   implied_prob_away: number;
+  implied_prob_draw: number;
   txline_data: Record<string, unknown>;
   txline_result_hash: string | null;
   updated_at: string;
@@ -639,12 +650,12 @@ export async function resetDatabase() {
         txline_result_hash = null,
         updated_at = now()
     `);
-    await pool.query("UPDATE matches SET odds_home = 2.10, odds_away = 3.40, odds_draw = 3.25 WHERE match_id = 'wc-2026-001'");
-    await pool.query("UPDATE matches SET odds_home = 2.50, odds_away = 2.80, odds_draw = 3.10 WHERE match_id = 'wc-2026-002'");
-    await pool.query("UPDATE matches SET odds_home = 2.30, odds_away = 3.00, odds_draw = 3.20 WHERE match_id = 'wc-2026-003'");
-    await pool.query("UPDATE matches SET odds_home = 2.60, odds_away = 2.70, odds_draw = 3.15 WHERE match_id = 'wc-2026-004'");
-    await pool.query("UPDATE matches SET odds_home = 2.40, odds_away = 2.90, odds_draw = 3.10 WHERE match_id = 'wc-2026-005'");
-    await pool.query("UPDATE matches SET odds_home = 3.10, odds_away = 2.20, odds_draw = 3.30 WHERE match_id = 'wc-2026-006'");
+    await pool.query("UPDATE matches SET odds_home = 2.10, odds_away = 3.40, odds_draw = 3.25, implied_prob_draw = 30.8 WHERE match_id = 'wc-2026-001'");
+    await pool.query("UPDATE matches SET odds_home = 2.50, odds_away = 2.80, odds_draw = 3.10, implied_prob_draw = 32.3 WHERE match_id = 'wc-2026-002'");
+    await pool.query("UPDATE matches SET odds_home = 2.30, odds_away = 3.00, odds_draw = 3.20, implied_prob_draw = 31.3 WHERE match_id = 'wc-2026-003'");
+    await pool.query("UPDATE matches SET odds_home = 2.60, odds_away = 2.70, odds_draw = 3.15, implied_prob_draw = 31.7 WHERE match_id = 'wc-2026-004'");
+    await pool.query("UPDATE matches SET odds_home = 2.40, odds_away = 2.90, odds_draw = 3.10, implied_prob_draw = 32.3 WHERE match_id = 'wc-2026-005'");
+    await pool.query("UPDATE matches SET odds_home = 3.10, odds_away = 2.20, odds_draw = 3.30, implied_prob_draw = 30.3 WHERE match_id = 'wc-2026-006'");
   } catch (err) {
     console.error("Error resetting Postgres database:", err);
     resetInMemoryStore();

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS matches (
   odds_draw numeric DEFAULT 3.0,
   implied_prob_home numeric DEFAULT 50.0,
   implied_prob_away numeric DEFAULT 50.0,
+  implied_prob_draw numeric DEFAULT 33.3,
   txline_data jsonb DEFAULT '{}'::jsonb,
   txline_result_hash text,
   updated_at timestamptz DEFAULT now()
@@ -28,10 +29,15 @@ CREATE TABLE IF NOT EXISTS odds_history (
   match_id text NOT NULL REFERENCES matches(match_id) ON DELETE CASCADE,
   odds_home numeric NOT NULL,
   odds_away numeric NOT NULL,
+  odds_draw numeric NOT NULL DEFAULT 3.0,
   implied_prob_home numeric NOT NULL,
   implied_prob_away numeric NOT NULL,
+  implied_prob_draw numeric NOT NULL DEFAULT 33.3,
   recorded_at timestamptz DEFAULT now()
 );
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS implied_prob_draw numeric DEFAULT 33.3;
+ALTER TABLE odds_history ADD COLUMN IF NOT EXISTS odds_draw numeric NOT NULL DEFAULT 3.0;
+ALTER TABLE odds_history ADD COLUMN IF NOT EXISTS implied_prob_draw numeric NOT NULL DEFAULT 33.3;
 CREATE INDEX IF NOT EXISTS idx_odds_history_match_id ON odds_history(match_id);
 CREATE INDEX IF NOT EXISTS idx_odds_history_recorded_at ON odds_history(recorded_at);
 
@@ -108,12 +114,12 @@ CREATE TABLE IF NOT EXISTS wallets (
 );
 
 -- Seed World Cup fixtures
-INSERT INTO matches (match_id, home_team, away_team, status, odds_home, odds_away, odds_draw, implied_prob_home, implied_prob_away, kickoff_time)
+INSERT INTO matches (match_id, home_team, away_team, status, odds_home, odds_away, odds_draw, implied_prob_home, implied_prob_away, implied_prob_draw, kickoff_time)
 VALUES
-  ('wc-2026-001', 'Brazil', 'Germany', 'scheduled', 2.10, 3.40, 3.25, 47.6, 29.4, now() + interval '1 hour'),
-  ('wc-2026-002', 'Argentina', 'France', 'scheduled', 2.50, 2.80, 3.10, 40.0, 35.7, now() + interval '2 hours'),
-  ('wc-2026-003', 'Spain', 'England', 'scheduled', 2.30, 3.00, 3.20, 43.5, 33.3, now() + interval '3 hours'),
-  ('wc-2026-004', 'Portugal', 'Netherlands', 'scheduled', 2.60, 2.70, 3.15, 38.5, 37.0, now() + interval '4 hours'),
-  ('wc-2026-005', 'Italy', 'Belgium', 'scheduled', 2.40, 2.90, 3.10, 41.7, 34.5, now() + interval '5 hours'),
-  ('wc-2026-006', 'Mexico', 'USA', 'scheduled', 3.10, 2.20, 3.30, 32.3, 45.5, now() + interval '6 hours')
+  ('wc-2026-001', 'Brazil', 'Germany', 'scheduled', 2.10, 3.40, 3.25, 47.6, 29.4, 30.8, now() + interval '1 hour'),
+  ('wc-2026-002', 'Argentina', 'France', 'scheduled', 2.50, 2.80, 3.10, 40.0, 35.7, 32.3, now() + interval '2 hours'),
+  ('wc-2026-003', 'Spain', 'England', 'scheduled', 2.30, 3.00, 3.20, 43.5, 33.3, 31.3, now() + interval '3 hours'),
+  ('wc-2026-004', 'Portugal', 'Netherlands', 'scheduled', 2.60, 2.70, 3.15, 38.5, 37.0, 31.7, now() + interval '4 hours'),
+  ('wc-2026-005', 'Italy', 'Belgium', 'scheduled', 2.40, 2.90, 3.10, 41.7, 34.5, 32.3, now() + interval '5 hours'),
+  ('wc-2026-006', 'Mexico', 'USA', 'scheduled', 3.10, 2.20, 3.30, 32.3, 45.5, 30.3, now() + interval '6 hours')
 ON CONFLICT (match_id) DO NOTHING;

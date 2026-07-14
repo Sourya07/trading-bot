@@ -14,6 +14,7 @@ export type TxLineSnapshot = {
   odds_draw: number;
   implied_prob_home: number;
   implied_prob_away: number;
+  implied_prob_draw: number;
   minute: number;
   last_event: string | null;
   timestamp: string;
@@ -73,10 +74,10 @@ export async function getMatch(matchId: string): Promise<Match | null> {
 export async function getOddsHistory(
   matchId: string,
   limit = 100
-): Promise<Array<{ recorded_at: string; odds_home: number; odds_away: number; implied_prob_home: number; implied_prob_away: number }>> {
+): Promise<Array<{ recorded_at: string; odds_home: number; odds_away: number; odds_draw: number; implied_prob_home: number; implied_prob_away: number; implied_prob_draw: number }>> {
   try {
     return await query(
-      `SELECT recorded_at, odds_home, odds_away, implied_prob_home, implied_prob_away
+      `SELECT recorded_at, odds_home, odds_away, odds_draw, implied_prob_home, implied_prob_away, implied_prob_draw
        FROM odds_history
        WHERE match_id = $1
        ORDER BY recorded_at ASC
@@ -97,15 +98,16 @@ export async function updateMatchOdds(
 ): Promise<void> {
   const probHome = decimalToImpliedProb(oddsHome);
   const probAway = decimalToImpliedProb(oddsAway);
+  const probDraw = decimalToImpliedProb(oddsDraw);
 
   try {
     await query(
       `UPDATE matches SET
         odds_home = $1, odds_away = $2, odds_draw = $3,
-        implied_prob_home = $4, implied_prob_away = $5,
+        implied_prob_home = $4, implied_prob_away = $5, implied_prob_draw = $6,
         updated_at = now()
-       WHERE match_id = $6`,
-      [oddsHome, oddsAway, oddsDraw, probHome, probAway, matchId]
+       WHERE match_id = $7`,
+      [oddsHome, oddsAway, oddsDraw, probHome, probAway, probDraw, matchId]
     );
   } catch (err) {
     console.error("Error updating match odds:", err);
@@ -113,9 +115,9 @@ export async function updateMatchOdds(
 
   try {
     await query(
-      `INSERT INTO odds_history (match_id, odds_home, odds_away, implied_prob_home, implied_prob_away)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [matchId, oddsHome, oddsAway, probHome, probAway]
+      `INSERT INTO odds_history (match_id, odds_home, odds_away, odds_draw, implied_prob_home, implied_prob_away, implied_prob_draw)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [matchId, oddsHome, oddsAway, oddsDraw, probHome, probAway, probDraw]
     );
   } catch (err) {
     console.error("Error inserting odds history:", err);
@@ -200,20 +202,24 @@ export async function seedInitialOddsHistory(): Promise<void> {
     if (count === 0) {
       const homeOdds = Number(match.odds_home);
       const awayOdds = Number(match.odds_away);
+      const drawOdds = Number(match.odds_draw);
       for (let i = 0; i < 10; i++) {
         const drift = (Math.random() - 0.5) * 0.1;
         const h = Math.max(1.1, homeOdds + drift);
         const a = Math.max(1.1, awayOdds - drift);
+        const d = Math.max(1.1, drawOdds + drift * 0.5);
         const recordedAt = new Date(Date.now() - (10 - i) * 30000).toISOString();
         await query(
-          `INSERT INTO odds_history (match_id, odds_home, odds_away, implied_prob_home, implied_prob_away, recorded_at)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+          `INSERT INTO odds_history (match_id, odds_home, odds_away, odds_draw, implied_prob_home, implied_prob_away, implied_prob_draw, recorded_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             match.match_id,
             Math.round(h * 100) / 100,
             Math.round(a * 100) / 100,
+            Math.round(d * 100) / 100,
             Math.round(decimalToImpliedProb(h) * 10) / 10,
             Math.round(decimalToImpliedProb(a) * 10) / 10,
+            Math.round(decimalToImpliedProb(d) * 10) / 10,
             recordedAt,
           ]
         );

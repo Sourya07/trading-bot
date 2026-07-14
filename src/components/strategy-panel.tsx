@@ -38,7 +38,8 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
   const [template, setTemplate] = useState("goal_shift_hedge");
   const [primarySide, setPrimarySide] = useState("home");
   const [primaryStake, setPrimaryStake] = useState(100);
-  const [hedgeStake, setHedgeStake] = useState(50);
+  const [hedgeRisk, setHedgeRisk] = useState(50); // 50% balanced default
+  const hedgeStake = Math.round(primaryStake * (hedgeRisk / 100));
   const [creating, setCreating] = useState(false);
   const [toggling, setToggling] = useState(false);
 
@@ -255,22 +256,65 @@ export function StrategyPanel({ strategy, wallet, matchId, onCreated }: Props) {
       </motion.div>
 
       <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="show">
-        <Label className="text-xs mb-1.5 block text-muted-foreground uppercase tracking-wider">Hedge Stake</Label>
-        <Input type="number" value={hedgeStake} onChange={(e) => setHedgeStake(Number(e.target.value))} className="h-9 text-xs font-mono-num bg-border/5 border-border/20" />
+        <div className="flex items-center justify-between mb-1.5">
+          <Label className="text-xs text-muted-foreground uppercase tracking-wider">Risk Appetite (Hedge Limit)</Label>
+          <span className="text-xs font-mono-num font-bold text-primary">{hedgeRisk}%</span>
+        </div>
+        <div className="bg-border/5 border border-border/20 rounded-lg p-3 space-y-3">
+          <input 
+            type="range" 
+            min="20" 
+            max="100" 
+            step="10" 
+            value={hedgeRisk} 
+            onChange={(e) => setHedgeRisk(Number(e.target.value))}
+            className="w-full accent-primary h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground font-medium uppercase tracking-wide px-1">
+            <span className={hedgeRisk <= 30 ? "text-primary" : ""}>Aggressive</span>
+            <span className={hedgeRisk > 30 && hedgeRisk <= 60 ? "text-primary" : ""}>Balanced</span>
+            <span className={hedgeRisk > 60 ? "text-primary" : ""}>Conservative</span>
+          </div>
+          <div className="pt-2 border-t border-border/20 flex justify-between items-center">
+            <span className="text-[11px] text-slate-400">Max Hedge Cap:</span>
+            <span className="text-xs font-mono-num font-bold text-white">{hedgeStake} credits</span>
+          </div>
+        </div>
       </motion.div>
 
       <motion.div custom={4} variants={fieldVariants} initial="hidden" animate="show">
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button
-            onClick={handleCreate}
-            disabled={creating || !wallet.connected || currentMatch?.status === "final"}
-            size="sm"
-            className="w-full gap-1.5 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-          >
-            <Shield className="h-3.5 w-3.5" />
-            {creating ? "Creating..." : currentMatch?.status === "final" ? "Match Finalized" : "Create Strategy"}
-          </Button>
-        </motion.div>
+        {(() => {
+          const entryOdds = primarySide === "home" ? Number(currentMatch?.odds_home) : Number(currentMatch?.odds_away);
+          const isLowOdds = entryOdds < 2.00 && currentMatch?.status !== "final";
+          
+          return (
+            <div className="space-y-3">
+              {isLowOdds && (
+                <div className="bg-amber-950/40 border border-amber-900/50 p-2.5 rounded-lg flex gap-2 items-start">
+                  <Shield className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-200/90 leading-tight">
+                    <strong>Warning:</strong> Low entry odds ({entryOdds.toFixed(2)}) limit the agent's ability to hedge profitably.
+                  </p>
+                </div>
+              )}
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button
+                  onClick={handleCreate}
+                  disabled={creating || !wallet.connected || currentMatch?.status === "final"}
+                  size="sm"
+                  className={`w-full gap-1.5 ${
+                    isLowOdds 
+                      ? "bg-amber-600 hover:bg-amber-700 text-white" 
+                      : "bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                  }`}
+                >
+                  <Shield className="h-3.5 w-3.5" />
+                  {creating ? "Creating..." : currentMatch?.status === "final" ? "Match Finalized" : "Create Strategy"}
+                </Button>
+              </motion.div>
+            </div>
+          );
+        })()}
         {!wallet.connected && (
           <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1.5">
             <Wallet className="h-3 w-3" />
