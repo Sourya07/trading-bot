@@ -363,48 +363,72 @@ export async function handleGoalEvent(
         (primarySide === "home" && scoringTeam === "away") ||
         (primarySide === "away" && scoringTeam === "home");
 
+      const primaryScore = primarySide === "home" ? Number(match.score_home) : Number(match.score_away);
+      const opponentScore = primarySide === "home" ? Number(match.score_away) : Number(match.score_home);
+      const goalMargin = primaryScore - opponentScore;
+
       if (opponentScored) {
-        const hedgeSide = scoringTeam === "home" ? "home" : "away";
-        const hedgeOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
+        // If we are still leading by 2 or more goals, a hedge is mathematically inefficient
+        const isLeadSafe = goalMargin >= 2;
 
-        const baseMessage = strategy.template === "momentum"
-          ? `Negative momentum detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Executing loss-cut hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect equity. Stake: ${hedgeStake} credits.`
-          : `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
+        if (isLeadSafe) {
+          const baseMessage = `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored, but primary side maintains a dominant +${goalMargin} goal lead. Skipping inefficient hedge to maximize profit.`;
+          
+          const message = await generateLLMReasoning(
+            strategy.template,
+            `Opponent scored but supported team retains a safe ${goalMargin}-goal lead. No risk offset required.`,
+            snapshot,
+            baseMessage
+          );
 
-        const message = await generateLLMReasoning(
-          strategy.template,
-          strategy.template === "momentum"
-            ? `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Momentum shifted. Placing protective hedge on ${hedgeSide}.`
-            : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Conceding goal. Placing hedge on ${hedgeSide}.`,
-          snapshot,
-          baseMessage
-        );
-
-        await logAgentEvent(strategy.id, matchId, "trigger", message, snapshot);
-
-        const position = await createPosition(
-          strategy.id,
-          matchId,
-          strategy.wallet,
-          hedgeSide,
-          hedgeOdds,
-          hedgeStake,
-          "hedge",
-          message,
-          snapshotHash,
-          null
-        );
-
-        if (position) {
+          await logAgentEvent(strategy.id, matchId, "info", message, snapshot);
           broadcast(clients, {
             type: "agent_event",
-            data: {
-              strategy_id: strategy.id,
-              event_type: "trigger",
-              message,
-              position,
-            },
+            data: { strategy_id: strategy.id, event_type: "info", message },
           });
+        } else {
+          const hedgeSide = scoringTeam === "home" ? "home" : "away";
+          const hedgeOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
+
+          const baseMessage = strategy.template === "momentum"
+            ? `Negative momentum detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Executing loss-cut hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect equity. Stake: ${hedgeStake} credits.`
+            : `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
+
+          const message = await generateLLMReasoning(
+            strategy.template,
+            strategy.template === "momentum"
+              ? `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Momentum shifted. Placing protective hedge on ${hedgeSide}.`
+              : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Conceding goal. Placing hedge on ${hedgeSide}.`,
+            snapshot,
+            baseMessage
+          );
+
+          await logAgentEvent(strategy.id, matchId, "trigger", message, snapshot);
+
+          const position = await createPosition(
+            strategy.id,
+            matchId,
+            strategy.wallet,
+            hedgeSide,
+            hedgeOdds,
+            hedgeStake,
+            "hedge",
+            message,
+            snapshotHash,
+            null
+          );
+
+          if (position) {
+            broadcast(clients, {
+              type: "agent_event",
+              data: {
+                strategy_id: strategy.id,
+                event_type: "trigger",
+                message,
+                position,
+              },
+            });
+          }
         }
       } else {
         const baseMessage = strategy.template === "momentum"

@@ -139,7 +139,7 @@ export function PositionsTable({ wallet }: Props) {
               const pnl = pos.status === "settled" ? Number(pos.pnl_credits) : 0;
               const currentProb = pos.side === "home" ? currentMatch?.implied_prob_home : pos.side === "away" ? currentMatch?.implied_prob_away : 0;
               const unrealized = pos.status === "open" && currentProb
-                ? pos.stake_credits * (Number(pos.entry_odds) - 1) * (Number(currentProb) / Number(pos.entry_odds) / 100) - pos.stake_credits
+                ? (pos.stake_credits * Number(pos.entry_odds) * (Number(currentProb) / 100)) - pos.stake_credits
                 : 0;
               const showUnrealized = pos.status === "open" && unrealized !== 0;
               
