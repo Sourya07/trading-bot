@@ -22,6 +22,9 @@ Designed for the **TxLINE Data Layer Track** on Superteam Earn.
     - **Risk Appetite Slider**: Users set their maximum hedge limit via a dynamic slider (Aggressive, Balanced, Conservative) with strict cap enforcement, replacing manual guessing.
     - **Minimum Odds Validation**: The terminal actively warns users if their primary entry odds drop below 2.00, ensuring the agent has enough "pricing runway" to execute profitable hedges.
 *   **Immutable Execution Proofs**: Every LLM-reasoned trade generates a verifiable JSON state snapshot of the live TxLINE odds and clock. This payload is hashed and visualized in a cyberpunk-styled **[Verify Proof]** UI modal, simulating Solana Anchor on-chain transparency for hackathon demonstrations.
+<br/>
+<img src="./image-1.png" width="800" alt="Verify Proof Screenshot" />
+
 *   **On-Chain Solana Integration**: Strategy registries and position entries are executed directly on the **Solana Devnet** via Phantom. When a match ends, the user signs a transaction on-chain calling the program's `settle_position` instruction to claim their payout.
 *   **Gemini 2.5 Flash Reasoning**: Integrates the **Gemini API** to analyze live scorelines, strategies, and odds in real-time, outputting dynamic quant-style reasoning logs directly to the terminal feed.
 *   **Neon DB with In-Memory Fallback**: Built on **Neon DB** using raw SQL migrations. If the remote database is unreachable, the server automatically falls back to an in-memory database mode with full live streams and simulations active.
