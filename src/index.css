@@ -989,16 +989,21 @@
 
   .hero-copy {
     padding-top: 1rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
   }
 
   .hero-copy h2 {
-    font-size: clamp(2.2rem, 10vw, 3.4rem);
-    max-width: 12ch;
+    font-size: clamp(2rem, 8.5vw, 3rem);
+    max-width: 100%;
+    word-break: break-word;
+    letter-spacing: -0.02em;
   }
 
   .hero-copy p {
-    max-width: 22rem;
-    font-size: 0.94rem;
+    max-width: 100%;
+    font-size: 0.9rem;
+    padding-right: 0.5rem;
   }
 
   .hero-object-wrap {
