@@ -137,8 +137,8 @@ export function PositionsTable({ wallet }: Props) {
             {positions.map((pos, i) => {
               const sideLabel = pos.side === "home" ? currentMatch?.home_team || "Home" : pos.side === "away" ? currentMatch?.away_team || "Away" : "Draw";
               const pnl = pos.status === "settled" ? Number(pos.pnl_credits) : 0;
-              const currentProb = pos.side === "home" ? currentMatch?.implied_prob_home : pos.side === "away" ? currentMatch?.implied_prob_away : 0;
-              const unrealized = pos.status === "open" && currentProb
+              const currentProb = pos.side === "home" ? currentMatch?.implied_prob_home : pos.side === "away" ? currentMatch?.implied_prob_away : currentMatch?.implied_prob_draw;
+              const unrealized = pos.status === "open" && currentProb !== undefined && currentProb !== null
                 ? (pos.stake_credits * Number(pos.entry_odds) * (Number(currentProb) / 100)) - pos.stake_credits
                 : 0;
               const showUnrealized = pos.status === "open" && unrealized !== 0;
