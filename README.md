@@ -62,6 +62,7 @@ Open `http://localhost:5173/` in your browser.
 
 ## Project Architecture
 
+![System Architecture Diagram](./image.png)
 ```
 ├── anchor/                  # Anchor Rust Solana smart contract
 │   └── programs/txhedge     # Instruction logic (create_strategy, create_position, settle_position)
