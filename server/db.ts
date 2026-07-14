@@ -181,15 +181,18 @@ function runInMemoryQuery<T>(text: string, params?: any[]): T[] {
     }] as unknown as T[];
   }
 
-  // 4. UPDATE matches SET score_home = $1, score_away = $2, status = $3, updated_at = now() WHERE match_id = $4
+  // 4. UPDATE matches SET score_home = $1, score_away = $2 ...
   // We can match substring to cover multi-line UPDATE statements
   if (sql.includes("UPDATE matches SET") && sql.includes("score_home = $1, score_away = $2")) {
-    const matchId = params?.[3];
+    const isStatusIncluded = sql.includes("status = $3");
+    const matchId = isStatusIncluded ? params?.[3] : params?.[2];
     const match = inMemoryStore.matches.get(matchId);
     if (match) {
       match.score_home = params?.[0];
       match.score_away = params?.[1];
-      match.status = params?.[2];
+      if (isStatusIncluded) {
+        match.status = params?.[2];
+      }
       match.updated_at = new Date().toISOString();
     }
     return [] as unknown as T[];

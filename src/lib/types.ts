@@ -92,7 +92,7 @@ export type OddsHistoryPoint = {
 export type WsMessage =
   | { type: "match_update"; data: Partial<MatchData> & { minute?: number; last_event?: string | null } }
   | { type: "match_settled"; data: { matchId: string; hash: string | null; snapshot: unknown } }
-  | { type: "agent_event"; data: { strategy_id: string; event_type?: string; message?: string; position?: PositionData; active?: boolean } }
+  | { type: "agent_event"; data: { strategy_id: string; event_type?: string; message?: string; position?: PositionData; active?: boolean; txline_snapshot?: any } }
   | { type: "position_settled"; data: { position_id: string; match_id: string; final_outcome: string; pnl: number; txline_result_hash: string } }
   | { type: "fixtures_update"; data: { count: number } }
   | { type: "subscribed"; matchId: string };

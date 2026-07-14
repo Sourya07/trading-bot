@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Info, Zap, CheckCircle, AlertTriangle, Bot, ChevronLeft, ChevronRight } from "lucide-react";
+import { ProofModal } from "./proof-modal";
 
 
 export function AgentFeed() {
@@ -85,9 +86,20 @@ export function AgentFeed() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs leading-relaxed">{log.message}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 font-mono-num">
-                          {new Date(log.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </p>
+                        <div className="flex items-center justify-between mt-2.5">
+                          <p className="text-[10px] text-muted-foreground font-mono-num">
+                            {new Date(log.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </p>
+                          <ProofModal log={log}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-5 px-2 text-[9px] uppercase tracking-wider bg-agent/10 hover:bg-agent/20 text-agent border border-agent/20 rounded-sm"
+                            >
+                              Verify Proof
+                            </Button>
+                          </ProofModal>
+                        </div>
                       </div>
                     </div>
                   </div>

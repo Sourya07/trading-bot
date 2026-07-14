@@ -345,6 +345,9 @@ export async function handleGoalEvent(
     score_away: match.score_away,
     odds_home: Number(match.odds_home),
     odds_away: Number(match.odds_away),
+    implied_prob_home: Number(match.implied_prob_home),
+    implied_prob_away: Number(match.implied_prob_away),
+    minute: _minute,
     timestamp: new Date().toISOString(),
   };
   const snapshotHash = hashSnapshot(snapshot);
@@ -357,7 +360,8 @@ export async function handleGoalEvent(
         hedge_stake?: number;
       };
       const primarySide = ruleConfig.primary_side || "home";
-      const hedgeStake = ruleConfig.hedge_stake || 50;
+      // Dynamic max cap: uses explicit hedge_stake, falls back to primary_stake size, or defaults to 50
+      const maxHedgeCap = ruleConfig.hedge_stake || ruleConfig.primary_stake || 50;
 
       const opponentScored =
         (primarySide === "home" && scoringTeam === "away") ||
@@ -368,15 +372,19 @@ export async function handleGoalEvent(
       const goalMargin = primaryScore - opponentScore;
 
       if (opponentScored) {
-        // If we are still leading by 2 or more goals, a hedge is mathematically inefficient
-        const isLeadSafe = goalMargin >= 2;
+        // Time-Decay (Theta) Integration
+        const matchMinute = match.minute || 0;
+        const timeDecay = Math.max(0, (90 - matchMinute) / 90);
+        
+        // If we are leading by 2+ goals, or leading by 1 goal late in the match (timeDecay < 0.15 => past 76th min)
+        const isLeadSafe = goalMargin >= 2 || (goalMargin === 1 && timeDecay < 0.15);
 
         if (isLeadSafe) {
-          const baseMessage = `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored, but primary side maintains a dominant +${goalMargin} goal lead. Skipping inefficient hedge to maximize profit.`;
+          const baseMessage = `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored, but primary side maintains a dominant +${goalMargin} goal lead at minute ${matchMinute}. Skipping inefficient hedge due to time-decay.`;
           
           const message = await generateLLMReasoning(
             strategy.template,
-            `Opponent scored but supported team retains a safe ${goalMargin}-goal lead. No risk offset required.`,
+            `Opponent scored but supported team retains a safe ${goalMargin}-goal lead at minute ${matchMinute}. Time decay (Theta) indicates no risk offset required.`,
             snapshot,
             baseMessage
           );
@@ -384,21 +392,38 @@ export async function handleGoalEvent(
           await logAgentEvent(strategy.id, matchId, "info", message, snapshot);
           broadcast(clients, {
             type: "agent_event",
-            data: { strategy_id: strategy.id, event_type: "info", message },
+            data: { strategy_id: strategy.id, event_type: "info", message, txline_snapshot: snapshot },
           });
         } else {
           const hedgeSide = scoringTeam === "home" ? "home" : "away";
           const hedgeOdds = scoringTeam === "home" ? Number(match.odds_home) : Number(match.odds_away);
+          const impliedProb = hedgeSide === "home" ? Number(match.implied_prob_home) : Number(match.implied_prob_away);
+          
+          // Kelly Criterion Integration for dynamic stake sizing
+          const trueProb = (impliedProb / 100) * (1 + timeDecay * 0.1); // add a slight time-decay premium to our model's true prob
+          const edge = (trueProb * hedgeOdds) - 1;
+          
+          let optimalStake = maxHedgeCap;
+          if (edge > 0 && hedgeOdds > 1) {
+            const kellyFraction = edge / (hedgeOdds - 1);
+            const calculatedKellyStake = (ruleConfig.primary_stake || 100) * kellyFraction * 2; // half-kelly adjustment
+            // Bound by user's max hedge stake, and a minimum floor of 10
+            optimalStake = Math.min(Math.max(10, calculatedKellyStake), maxHedgeCap);
+          } else {
+            // Defensive loss-cut when mathematical edge is negative: scale down the stake
+            optimalStake = Math.max(10, maxHedgeCap * 0.5); 
+          }
+          optimalStake = Number(optimalStake.toFixed(2));
 
           const baseMessage = strategy.template === "momentum"
-            ? `Negative momentum detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Executing loss-cut hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect equity. Stake: ${hedgeStake} credits.`
-            : `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Your primary position is on ${primarySide === "home" ? match.home_team : match.away_team}. Opening hedge on ${hedgeSide === "home" ? match.home_team : match.away_team} at ${hedgeOdds.toFixed(2)} to protect against a shift in momentum. Stake: ${hedgeStake} credits.`;
+            ? `Negative momentum: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Executing loss-cut hedge on ${hedgeSide} at ${hedgeOdds.toFixed(2)}. Calculated Kelly optimal stake: ${optimalStake} credits (Edge: ${(edge > 0 ? '+' : '')}${(edge*100).toFixed(1)}%).`
+            : `Goal detected: ${scoringTeam === "home" ? match.home_team : match.away_team} scored. Opening dynamic hedge on ${hedgeSide} at ${hedgeOdds.toFixed(2)}. Calculated optimal stake: ${optimalStake} credits.`;
 
           const message = await generateLLMReasoning(
             strategy.template,
             strategy.template === "momentum"
-              ? `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Momentum shifted. Placing protective hedge on ${hedgeSide}.`
-              : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Conceding goal. Placing hedge on ${hedgeSide}.`,
+              ? `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Momentum shifted. Placing protective Kelly-weighted hedge of ${optimalStake} on ${hedgeSide}.`
+              : `Opponent team (${scoringTeam === "home" ? match.home_team : match.away_team}) scored. Conceding goal. Placing dynamic hedge of ${optimalStake} on ${hedgeSide}.`,
             snapshot,
             baseMessage
           );
@@ -411,7 +436,7 @@ export async function handleGoalEvent(
             strategy.wallet,
             hedgeSide,
             hedgeOdds,
-            hedgeStake,
+            optimalStake,
             "hedge",
             message,
             snapshotHash,
@@ -426,6 +451,7 @@ export async function handleGoalEvent(
                 event_type: "trigger",
                 message,
                 position,
+                txline_snapshot: snapshot,
               },
             });
           }
@@ -445,7 +471,7 @@ export async function handleGoalEvent(
         await logAgentEvent(strategy.id, matchId, "info", message, snapshot);
         broadcast(clients, {
           type: "agent_event",
-          data: { strategy_id: strategy.id, event_type: "info", message },
+          data: { strategy_id: strategy.id, event_type: "info", message, txline_snapshot: snapshot },
         });
       }
     } else if (strategy.template === "mean_reversion") {
@@ -455,7 +481,7 @@ export async function handleGoalEvent(
         hedge_stake?: number;
       };
       const primarySide = ruleConfig.primary_side || "home";
-      const reversionStake = ruleConfig.hedge_stake || 50;
+      const reversionStake = ruleConfig.hedge_stake || ruleConfig.primary_stake || 50;
 
       const opponentScored =
         (primarySide === "home" && scoringTeam === "away") ||

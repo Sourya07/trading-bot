@@ -48,7 +48,7 @@ export function useTxLineSocket(walletAddress?: string) {
                 match_id: currentMatch.match_id,
                 event_type: msg.data.event_type || "info",
                 message: msg.data.message,
-                txline_snapshot: {},
+                txline_snapshot: msg.data.txline_snapshot || {},
                 created_at: new Date().toISOString(),
               });
             }
