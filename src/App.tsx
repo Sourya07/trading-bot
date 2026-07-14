@@ -177,15 +177,12 @@ export function App() {
                     }
                   }
                 }}
-                className="text-[10px] uppercase font-bold tracking-wider text-slate-400 hover:text-white hover:bg-slate-800/80 border-slate-800 gap-1.5 h-9"
+                className="hidden sm:flex text-[10px] uppercase font-bold tracking-wider text-slate-400 hover:text-white hover:bg-slate-800/80 border-slate-800 gap-1.5 h-9"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reset Data
               </Button>
               <WalletButton wallet={wallet} balance={walletBalance} />
-              <Button variant="outline" size="icon-sm" className="menu-button md:hidden" aria-label="Open menu">
-                <Menu className="h-4 w-4" />
-              </Button>
             </motion.div>
           </div>
         </header>
