@@ -562,6 +562,7 @@ export type Match = {
   implied_prob_home: number;
   implied_prob_away: number;
   implied_prob_draw: number;
+  minute?: number | null;
   txline_data: Record<string, unknown>;
   txline_result_hash: string | null;
   updated_at: string;

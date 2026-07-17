@@ -139,6 +139,7 @@ async function processMatch(
     
     const probHome = decimalToImpliedProb(finalOdds.home);
     const probAway = decimalToImpliedProb(finalOdds.away);
+    const probDraw = decimalToImpliedProb(finalOdds.draw);
 
     const snapshot: TxLineSnapshot = {
       match_id: state.matchId,
@@ -152,6 +153,7 @@ async function processMatch(
       odds_draw: finalOdds.draw,
       implied_prob_home: Math.round(probHome * 10) / 10,
       implied_prob_away: Math.round(probAway * 10) / 10,
+      implied_prob_draw: Math.round(probDraw * 10) / 10,
       minute: 90,
       last_event: "Match finalized",
       timestamp: new Date().toISOString(),

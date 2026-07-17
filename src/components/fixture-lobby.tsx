@@ -7,6 +7,8 @@ import { GlowCard } from "./glow-card";
 import { AnimatedNumber } from "./animated-number";
 import { Activity, Zap, Shield, Users, Flame, LineChart, Trophy } from "lucide-react";
 import { getFlag } from "@/lib/flags";
+import { FeaturedMarket } from "./featured-market";
+import { Button } from "./ui/button";
 
 type Props = {
   onOpenMatch: (matchId: string) => void;
@@ -34,6 +36,8 @@ export function FixtureLobby({ onOpenMatch }: Props) {
           Select a live or scheduled match below to open the verifiable hedging terminal. Monitor real-time odds fluctuations and cryptographic proof states.
         </p>
       </div>
+      
+      <FeaturedMarket />
 
       {/* Stats row */}
       <motion.div
@@ -224,6 +228,20 @@ function FixtureCard({ match, onOpen }: { match: MatchData; onOpen: () => void }
               <AnimatedNumber value={Number(match.odds_away)} decimals={2} />
             </span>
           </div>
+        </div>
+
+        {/* Auto-Hedge Button */}
+        <div className="mt-3 overflow-hidden rounded-lg">
+          <Button 
+            className="w-full h-8 text-[10px] font-bold tracking-wider uppercase bg-emerald-950/30 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-900/50 hover:border-emerald-500/50 transition-all flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMatch(match.match_id);
+            }}
+          >
+            <Shield className="h-3 w-3 mr-1.5" />
+            Auto-Hedge
+          </Button>
         </div>
       </div>
     </GlowCard>

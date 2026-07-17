@@ -243,7 +243,8 @@ export async function getLatestSnapshot(matchId: string): Promise<TxLineSnapshot
     odds_draw: Number(match.odds_draw),
     implied_prob_home: Number(match.implied_prob_home),
     implied_prob_away: Number(match.implied_prob_away),
-    minute: 0,
+    implied_prob_draw: Number(match.implied_prob_draw),
+    minute: match.minute || 0,
     last_event: null,
     timestamp: new Date().toISOString(),
   };
