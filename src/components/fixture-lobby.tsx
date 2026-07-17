@@ -236,7 +236,7 @@ function FixtureCard({ match, onOpen }: { match: MatchData; onOpen: () => void }
             className="w-full h-8 text-[10px] font-bold tracking-wider uppercase bg-emerald-950/30 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-900/50 hover:border-emerald-500/50 transition-all flex items-center justify-center"
             onClick={(e) => {
               e.stopPropagation();
-              onOpenMatch(match.match_id);
+              onOpen();
             }}
           >
             <Shield className="h-3 w-3 mr-1.5" />
