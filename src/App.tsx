@@ -7,7 +7,7 @@ import { usePhantomWallet } from "./lib/use-phantom-wallet";
 import { useTerminalStore } from "./lib/store";
 import { api } from "./lib/api";
 import { Button } from "./components/ui/button";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, LogOut } from "lucide-react";
 
 export function App() {
   const shellRef = useRef<HTMLDivElement>(null);
@@ -251,9 +251,14 @@ function WalletButton({ wallet, balance }: { wallet: ReturnType<typeof usePhanto
         <p className="text-[9px] text-white/45 uppercase tracking-wider">Credits</p>
         <p className="font-mono-num font-semibold text-xs text-emerald-400">{balance.toLocaleString()} USDC</p>
       </div>
-      <Button onClick={wallet.disconnect} variant="outline" size="sm" className="font-mono-num h-7 text-[10px] border-white/10 hover:bg-white/5">
-        {addr.slice(0, 4)}...{addr.slice(-4)}
-      </Button>
+      <div className="flex items-center gap-1.5">
+        <div className="font-mono-num px-2 py-1 h-7 text-[10px] border border-white/10 rounded-md text-white/60 bg-white/5 flex items-center justify-center">
+          {addr.slice(0, 4)}...{addr.slice(-4)}
+        </div>
+        <Button onClick={wallet.disconnect} variant="outline" size="sm" className="h-7 w-7 p-0 border-white/10 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/50" title="Disconnect Wallet">
+          <LogOut className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }
